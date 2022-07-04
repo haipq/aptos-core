@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use aptos_config::network_id::{NetworkId, PeerNetworkId};
-use aptos_metrics::{
-    register_histogram, register_histogram_vec, register_int_counter, register_int_counter_vec,
-    register_int_gauge_vec, DurationHistogram, HistogramTimer, HistogramVec, IntCounter,
-    IntCounterVec, IntGauge, IntGaugeVec,
+use aptos_metrics_core::{
+    op_counters::DurationHistogram, register_histogram, register_histogram_vec,
+    register_int_counter, register_int_counter_vec, register_int_gauge_vec, HistogramTimer,
+    HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec,
 };
 use once_cell::sync::Lazy;
 use short_hex_str::AsShortHexStr;
@@ -77,7 +77,7 @@ pub const INVALID_REQUEST_ID: &str = "invalid_req_id";
 pub const UNKNOWN_PEER: &str = "unknown_peer";
 
 /// Counter tracking size of various indices in core mempool
-static CORE_MEMPOOL_INDEX_SIZE: Lazy<IntGaugeVec> = Lazy::new(|| {
+pub static CORE_MEMPOOL_INDEX_SIZE: Lazy<IntGaugeVec> = Lazy::new(|| {
     register_int_gauge_vec!(
         "core_mempool_index_size",
         "Size of a core mempool index",

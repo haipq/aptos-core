@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use aptos_api_types::{Error, LedgerInfo, TransactionOnChainData};
-use aptos_config::config::ApiConfig;
+use aptos_config::config::{NodeConfig, RoleType};
 use aptos_crypto::HashValue;
 use aptos_mempool::{MempoolClientRequest, MempoolClientSender, SubmissionStatus};
 use aptos_types::{
@@ -25,7 +25,9 @@ use aptos_types::{
 use aptos_vm::data_cache::{IntoMoveResolver, RemoteStorageOwned};
 use futures::{channel::oneshot, SinkExt};
 use std::{convert::Infallible, sync::Arc};
-use storage_interface::state_view::{DbStateView, DbStateViewAtVersion, LatestDbStateView};
+use storage_interface::state_view::{
+    DbStateView, DbStateViewAtVersion, LatestDbStateCheckpointView,
+};
 use warp::{filters::BoxedFilter, Filter, Reply};
 
 // Context holds application scope context
@@ -34,7 +36,7 @@ pub struct Context {
     chain_id: ChainId,
     db: Arc<dyn DbReader>,
     mp_sender: MempoolClientSender,
-    api_config: ApiConfig,
+    node_config: NodeConfig,
 }
 
 impl Context {
@@ -42,19 +44,19 @@ impl Context {
         chain_id: ChainId,
         db: Arc<dyn DbReader>,
         mp_sender: MempoolClientSender,
-        api_config: ApiConfig,
+        node_config: NodeConfig,
     ) -> Self {
         Self {
             chain_id,
             db,
             mp_sender,
-            api_config,
+            node_config,
         }
     }
 
     pub fn move_resolver(&self) -> Result<RemoteStorageOwned<DbStateView>> {
         self.db
-            .latest_state_view()
+            .latest_state_checkpoint_view()
             .map(|state_view| state_view.into_move_resolver())
     }
 
@@ -66,8 +68,12 @@ impl Context {
         self.chain_id
     }
 
+    pub fn node_role(&self) -> RoleType {
+        self.node_config.base.role
+    }
+
     pub fn content_length_limit(&self) -> u64 {
-        self.api_config.content_length_limit()
+        self.node_config.api.content_length_limit()
     }
 
     pub fn filter(self) -> impl Filter<Extract = (Context,), Error = Infallible> + Clone {
@@ -247,8 +253,8 @@ impl Context {
             .get_events(event_key, start, Order::Ascending, limit as u64)?;
         Ok(events
             .into_iter()
-            .filter(|(version, _event)| version <= &ledger_version)
-            .map(|(_, event)| event)
+            .filter(|event| event.transaction_version <= ledger_version)
+            .map(|event| event.event)
             .collect::<Vec<_>>())
     }
 

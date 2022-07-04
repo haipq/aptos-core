@@ -8,12 +8,12 @@ use proptest::{
     prelude::*,
 };
 
-use aptos_jellyfish_merkle::restore::JellyfishMerkleRestore;
+use aptos_jellyfish_merkle::{restore::StateSnapshotRestore, TreeReader};
 use aptos_temppath::TempPath;
 use aptos_types::{
     access_path::AccessPath, account_address::AccountAddress, state_store::state_key::StateKeyTag,
 };
-use storage_interface::StateSnapshotReceiver;
+use storage_interface::{jmt_update_refs, jmt_updates, DbReader, StateSnapshotReceiver};
 
 use crate::{pruner, AptosDB};
 
@@ -23,31 +23,35 @@ fn put_value_set(
     state_store: &StateStore,
     value_set: Vec<(StateKey, StateValue)>,
     version: Version,
+    base_version: Option<Version>,
 ) -> HashValue {
-    let mut cs = ChangeSet::new();
     let value_set: HashMap<_, _> = value_set
         .iter()
         .map(|(key, value)| (key.clone(), value.clone()))
         .collect();
+    let jmt_updates = jmt_updates(&value_set);
 
     let root = state_store
-        .put_value_sets(vec![&value_set], None, version, &mut cs)
-        .unwrap()[0];
-    state_store.db.write_schemas(cs.batch).unwrap();
-    state_store.set_latest_version(version);
+        .merklize_value_set(jmt_update_refs(&jmt_updates), None, version, base_version)
+        .unwrap();
+    let mut cs = ChangeSet::new();
+    state_store
+        .put_value_sets(vec![&value_set], version, &mut cs)
+        .unwrap();
+    state_store.ledger_db.write_schemas(cs.batch).unwrap();
     root
 }
 
 fn prune_stale_indices(
     store: &StateStore,
-    least_readable_version: Version,
-    target_least_readable_version: Version,
+    min_readable_version: Version,
+    target_min_readable_version: Version,
     limit: usize,
 ) {
     pruner::state_store::prune_state_store(
-        Arc::clone(&store.db),
-        least_readable_version,
-        target_least_readable_version,
+        &store.state_merkle_db,
+        min_readable_version,
+        target_min_readable_version,
         limit,
     )
     .unwrap();
@@ -72,7 +76,7 @@ fn verify_value_and_proof_in_store(
     root: HashValue,
 ) {
     let (value, proof) = store
-        .get_value_with_proof_by_version(&key, version)
+        .get_state_value_with_proof_by_version(&key, version)
         .unwrap();
     assert_eq!(value.as_ref(), expected_value);
     proof.verify(root, key.hash(), value.as_ref()).unwrap();
@@ -84,7 +88,7 @@ fn verify_value_index_in_store(
     expected_value: Option<&StateValue>,
     version: Version,
 ) {
-    let value = store.get_value_by_version(&key, version).unwrap();
+    let value = store.get_state_value_by_version(&key, version).unwrap();
     assert_eq!(value.as_ref(), expected_value);
 }
 
@@ -94,7 +98,9 @@ fn test_empty_store() {
     let db = AptosDB::new_for_test(&tmp_dir);
     let store = &db.state_store;
     let key = StateKey::Raw(String::from("test_key").into_bytes());
-    assert!(store.get_value_with_proof_by_version(&key, 0).is_err());
+    assert!(store
+        .get_state_value_with_proof_by_version(&key, 0)
+        .is_err());
 }
 
 #[test]
@@ -116,6 +122,7 @@ fn test_state_store_reader_writer() {
         store,
         vec![(key1.clone(), value1.clone())],
         0, /* version */
+        None,
     );
     verify_value_and_proof(store, key1.clone(), Some(&value1), 0, root);
 
@@ -133,6 +140,7 @@ fn test_state_store_reader_writer() {
             (key3.clone(), value3.clone()),
         ],
         1, /* version */
+        Some(0),
     );
 
     verify_value_and_proof(store, key1, Some(&value1_update), 1, root);
@@ -162,6 +170,7 @@ fn test_get_values_by_key_prefix() {
             (key2.clone(), value2_v0.clone()),
         ],
         0,
+        None,
     );
 
     let key_value_map = store
@@ -183,6 +192,7 @@ fn test_get_values_by_key_prefix() {
             (key4.clone(), value4_v1.clone()),
         ],
         1,
+        Some(0),
     );
 
     // Ensure that we still get only values for key1 and key2 for version 0 after the update
@@ -209,7 +219,7 @@ fn test_get_values_by_key_prefix() {
 
     let account1_key_prefx = StateKeyPrefix::new(StateKeyTag::AccessPath, address1.to_vec());
 
-    put_value_set(store, vec![(key5.clone(), value5_v2.clone())], 2);
+    put_value_set(store, vec![(key5.clone(), value5_v2.clone())], 2, Some(1));
 
     // address1 did not exist in version 0 and 1.
     let key_value_map = store
@@ -256,6 +266,7 @@ fn test_retired_records() {
         store,
         vec![(key1.clone(), value1.clone()), (key2.clone(), value2)],
         0, /* version */
+        None,
     );
     let root1 = put_value_set(
         store,
@@ -264,19 +275,21 @@ fn test_retired_records() {
             (key3.clone(), value3.clone()),
         ],
         1, /* version */
+        Some(0),
     );
     let root2 = put_value_set(
         store,
         vec![(key3.clone(), value3_update.clone())],
         2, /* version */
+        Some(1),
     );
 
     // Verify.
     // Prune with limit=0, nothing is gone.
     {
         prune_stale_indices(
-            store, 0, /* least_readable_version */
-            1, /* target_least_readable_version */
+            store, 0, /* min_readable_version */
+            1, /* target_min_readable_version */
             0, /* limit */
         );
         verify_value_and_proof(store, key1.clone(), Some(&value1), 0, root0);
@@ -284,12 +297,14 @@ fn test_retired_records() {
     // Prune till version=1.
     {
         prune_stale_indices(
-            store, 0,   /* least_readable_version */
-            1,   /* target_least_readable_version */
+            store, 0,   /* min_readable_version */
+            1,   /* target_min_readable_version */
             100, /* limit */
         );
         // root0 is gone.
-        assert!(store.get_value_with_proof_by_version(&key2, 0).is_err());
+        assert!(store
+            .get_state_value_with_proof_by_version(&key2, 0)
+            .is_err());
         // root1 is still there.
         verify_value_and_proof(store, key1.clone(), Some(&value1), 1, root1);
         verify_value_and_proof(store, key2.clone(), Some(&value2_update), 1, root1);
@@ -298,12 +313,14 @@ fn test_retired_records() {
     // Prune till version=2.
     {
         prune_stale_indices(
-            store, 1,   /* least_readable_version */
-            2,   /* target_least_readable_version */
+            store, 1,   /* min_readable_version */
+            2,   /* target_min_readable_version */
             100, /* limit */
         );
         // root1 is gone.
-        assert!(store.get_value_with_proof_by_version(&key2, 1).is_err());
+        assert!(store
+            .get_state_value_with_proof_by_version(&key2, 1)
+            .is_err());
         // root2 is still there.
         verify_value_and_proof(store, key1, Some(&value1), 2, root2);
         verify_value_and_proof(store, key2, Some(&value2_update), 2, root2);
@@ -312,163 +329,31 @@ fn test_retired_records() {
 }
 
 #[test]
-pub fn test_find_latest_persisted_version_less_than() {
+pub fn test_get_state_snapshot_before() {
     let tmp_dir = TempPath::new();
     let db = AptosDB::new_for_test(&tmp_dir);
     let store = &db.state_store;
 
     // Empty store
-    assert_eq!(
-        store.find_latest_persisted_version_less_than(0).unwrap(),
-        None,
-    );
+    assert_eq!(store.get_state_snapshot_before(0).unwrap(), None,);
 
     // put in genesis
     let kv = vec![(
         StateKey::Raw(b"key".to_vec()),
         StateValue::from(b"value".to_vec()),
     )];
-    put_value_set(store, kv.clone(), 0);
-    assert_eq!(
-        store.find_latest_persisted_version_less_than(0).unwrap(),
-        None
-    );
-    assert_eq!(
-        store.find_latest_persisted_version_less_than(1).unwrap(),
-        Some(0)
-    );
-    assert_eq!(
-        store.find_latest_persisted_version_less_than(2).unwrap(),
-        Some(0)
-    );
+    let hash = put_value_set(store, kv.clone(), 0, None);
+    assert_eq!(store.get_state_snapshot_before(0).unwrap(), None);
+    assert_eq!(store.get_state_snapshot_before(1).unwrap(), Some((0, hash)));
+    assert_eq!(store.get_state_snapshot_before(2).unwrap(), Some((0, hash)));
 
     // put in another version
-    put_value_set(store, kv, 2);
-    assert_eq!(
-        store.find_latest_persisted_version_less_than(4).unwrap(),
-        Some(2)
-    );
-    assert_eq!(
-        store.find_latest_persisted_version_less_than(3).unwrap(),
-        Some(2)
-    );
-    assert_eq!(
-        store.find_latest_persisted_version_less_than(2).unwrap(),
-        Some(0)
-    );
-    assert_eq!(
-        store.find_latest_persisted_version_less_than(1).unwrap(),
-        Some(0)
-    );
-    assert_eq!(
-        store.find_latest_persisted_version_less_than(0).unwrap(),
-        None,
-    );
-}
-
-#[test]
-pub fn test_find_latest_persisted_version_less_than_with_pre_genesis() {
-    let kv = vec![(
-        StateKey::Raw(b"key".to_vec()),
-        StateValue::from(b"value".to_vec()),
-    )];
-    // make a DB with PRE_GENESIS
-    let tmp_dir = {
-        let tmp_dir1 = TempPath::new();
-        let db1 = AptosDB::new_for_test(&tmp_dir1);
-        let store1 = &db1.state_store;
-        put_value_set(store1, kv.clone(), 0);
-        let root_hash = store1.get_root_hash(0).unwrap();
-        let tmp_dir2 = TempPath::new();
-        let db2 = AptosDB::new_for_test(&tmp_dir2);
-        let store2 = &db2.state_store;
-        let mut restore = store2
-            .get_snapshot_receiver(PRE_GENESIS_VERSION, root_hash)
-            .unwrap();
-        let chunk = store1.get_value_chunk_with_proof(0, 0, 1).unwrap();
-        restore.add_chunk(chunk.raw_values, chunk.proof).unwrap();
-        restore.finish_box().unwrap();
-        tmp_dir2
-    };
-    // re-open the DB, to mimic the real use case (pre-genesis DB is pre-generated with db-restore)
-    let db = AptosDB::new_for_test(&tmp_dir);
-    let store = &db.state_store;
-
-    // Assert we see the pre-genesis
-    assert!(store
-        .find_latest_persisted_version_less_than(PRE_GENESIS_VERSION)
-        .is_err());
-    assert_eq!(
-        store.find_latest_persisted_version_less_than(0).unwrap(),
-        Some(PRE_GENESIS_VERSION)
-    );
-    assert_eq!(
-        store.find_latest_persisted_version_less_than(1).unwrap(),
-        Some(PRE_GENESIS_VERSION)
-    );
-
-    // put in genesis
-    put_value_set(store, kv.clone(), 0);
-    assert_eq!(
-        store.find_latest_persisted_version_less_than(0).unwrap(),
-        Some(PRE_GENESIS_VERSION),
-    );
-    assert_eq!(
-        store.find_latest_persisted_version_less_than(1).unwrap(),
-        Some(0)
-    );
-    assert_eq!(
-        store.find_latest_persisted_version_less_than(2).unwrap(),
-        Some(0)
-    );
-
-    // put in another version
-    put_value_set(store, kv, 2);
-    assert_eq!(
-        store.find_latest_persisted_version_less_than(4).unwrap(),
-        Some(2)
-    );
-    assert_eq!(
-        store.find_latest_persisted_version_less_than(3).unwrap(),
-        Some(2)
-    );
-    assert_eq!(
-        store.find_latest_persisted_version_less_than(2).unwrap(),
-        Some(0)
-    );
-    assert_eq!(
-        store.find_latest_persisted_version_less_than(1).unwrap(),
-        Some(0)
-    );
-    assert_eq!(
-        store.find_latest_persisted_version_less_than(0).unwrap(),
-        Some(PRE_GENESIS_VERSION),
-    );
-
-    // re-open DB
-    drop(db);
-    let db = AptosDB::new_for_test(&tmp_dir);
-    let store = &db.state_store;
-    assert_eq!(
-        store.find_latest_persisted_version_less_than(4).unwrap(),
-        Some(2)
-    );
-    assert_eq!(
-        store.find_latest_persisted_version_less_than(3).unwrap(),
-        Some(2)
-    );
-    assert_eq!(
-        store.find_latest_persisted_version_less_than(2).unwrap(),
-        Some(0)
-    );
-    assert_eq!(
-        store.find_latest_persisted_version_less_than(1).unwrap(),
-        Some(0)
-    );
-    assert_eq!(
-        store.find_latest_persisted_version_less_than(0).unwrap(),
-        Some(PRE_GENESIS_VERSION),
-    );
+    put_value_set(store, kv, 2, Some(0));
+    assert_eq!(store.get_state_snapshot_before(4).unwrap(), Some((2, hash)));
+    assert_eq!(store.get_state_snapshot_before(3).unwrap(), Some((2, hash)));
+    assert_eq!(store.get_state_snapshot_before(2).unwrap(), Some((0, hash)));
+    assert_eq!(store.get_state_snapshot_before(1).unwrap(), Some((0, hash)));
+    assert_eq!(store.get_state_snapshot_before(0).unwrap(), None,);
 }
 
 proptest! {
@@ -496,9 +381,9 @@ proptest! {
                 .unwrap();
             let mut expected_values: Vec<_> = kvs[..=i]
                 .iter()
-                .map(|(key, value)| (key.hash(), StateKeyAndValue::new(key.clone(), value.clone())))
+                .map(|(key, value)| (key.clone(), value.clone()))
                 .collect();
-            expected_values.sort_unstable_by_key(|item| item.0);
+            expected_values.sort_unstable_by_key(|item| item.0.hash());
             prop_assert_eq!(actual_values, expected_values);
         }
     }
@@ -524,21 +409,19 @@ proptest! {
         let store2 = &db2.state_store;
 
         let mut restore =
-            JellyfishMerkleRestore::new(Arc::clone(store2), version, expected_root_hash).unwrap();
+            StateSnapshotRestore::new(&store2.state_merkle_db, store2, version, expected_root_hash).unwrap();
 
         let mut ordered_input: Vec<_> = input
             .into_iter()
-            .map(|(addr, value)| (addr.hash(), value))
             .collect();
-        ordered_input.sort_unstable_by_key(|(key, _value)| *key);
+        ordered_input.sort_unstable_by_key(|(key, _value)| key.hash());
 
         let batch1: Vec<_> = ordered_input
             .clone()
             .into_iter()
             .take(batch1_size)
-            .map(|(key, value)| (key, StateKeyAndValue::new(StateKey::Raw(vec![]), value)))
             .collect();
-        let rightmost_of_batch1 = batch1.last().map(|(key, _value)| *key).unwrap();
+        let rightmost_of_batch1 = batch1.last().map(|(key, _value)| key.hash()).unwrap();
         let proof_of_batch1 = store1
             .get_value_range_proof(rightmost_of_batch1, version)
             .unwrap();
@@ -548,9 +431,8 @@ proptest! {
         let batch2: Vec<_> = ordered_input
             .into_iter()
             .skip(batch1_size)
-            .map(|(key, value)| (key, StateKeyAndValue::new(StateKey::Raw(vec![]), value)))
             .collect();
-        let rightmost_of_batch2 = batch2.last().map(|(key, _value)| *key).unwrap();
+        let rightmost_of_batch2 = batch2.last().map(|(key, _value)| key.hash()).unwrap();
         let proof_of_batch2 = store1
             .get_value_range_proof(rightmost_of_batch2, version)
             .unwrap();
@@ -625,28 +507,26 @@ proptest! {
         let store2 = &db2.state_store;
 
         let mut restore =
-            JellyfishMerkleRestore::new(Arc::clone(store2), version, expected_root_hash).unwrap();
+            StateSnapshotRestore::new(&store2.state_merkle_db, store2, version, expected_root_hash).unwrap();
 
         let mut ordered_input: Vec<_> = input
             .into_iter()
-            .map(|(addr, value)| (addr.hash(), value))
             .collect();
-        ordered_input.sort_unstable_by_key(|(key, _value)| *key);
+        ordered_input.sort_unstable_by_key(|(key, _value)| key.hash());
 
         let batch1: Vec<_> = ordered_input
             .into_iter()
             .take(batch1_size)
-            .map(|(key, value)| (key, StateKeyAndValue::new(StateKey::Raw(vec![]), value)))
             .collect();
-        let rightmost_of_batch1 = batch1.last().map(|(key, _value)| *key).unwrap();
+        let rightmost_of_batch1 = batch1.last().map(|(key, _value)| key.hash()).unwrap();
         let proof_of_batch1 = store1
             .get_value_range_proof(rightmost_of_batch1, version)
             .unwrap();
 
         restore.add_chunk(batch1, proof_of_batch1).unwrap();
 
-        let expected = store2.get_rightmost_leaf_naive().unwrap();
-        let actual = store2.get_rightmost_leaf().unwrap();
+        let expected = store2.state_merkle_db.get_rightmost_leaf_naive().unwrap();
+        let actual = store2.state_merkle_db.get_rightmost_leaf().unwrap();
         prop_assert_eq!(actual, expected);
     }
 
@@ -676,13 +556,21 @@ fn update_store(
     first_version: Version,
 ) {
     for (i, (key, value)) in input.enumerate() {
-        let mut cs = ChangeSet::new();
-        let value_state_set: HashMap<_, _> = std::iter::once((key, value)).collect();
+        let value_state_set = vec![(key, value)].into_iter().collect();
+        let jmt_updates = jmt_updates(&value_state_set);
         let version = first_version + i as Version;
         store
-            .put_value_sets(vec![&value_state_set], None, version, &mut cs)
+            .merklize_value_set(
+                jmt_update_refs(&jmt_updates),
+                None,
+                version,
+                version.checked_sub(1),
+            )
             .unwrap();
-        store.db.write_schemas(cs.batch).unwrap();
-        store.set_latest_version(version);
+        let mut cs = ChangeSet::new();
+        store
+            .put_value_sets(vec![&value_state_set], version, &mut cs)
+            .unwrap();
+        store.ledger_db.write_schemas(cs.batch).unwrap();
     }
 }

@@ -4,13 +4,12 @@
 use crate::{
     block_storage::{BlockReader, BlockStore},
     logging::{LogEvent, LogSchema},
-    network::NetworkSender,
+    network::{IncomingBlockRetrievalRequest, NetworkSender},
     network_interface::ConsensusMsg,
     persistent_liveness_storage::{PersistentLivenessStorage, RecoveryData},
     state_replication::StateComputer,
 };
 use anyhow::bail;
-
 use aptos_crypto::HashValue;
 use aptos_logger::prelude::*;
 use aptos_types::{
@@ -19,12 +18,14 @@ use aptos_types::{
 };
 use consensus_types::{
     block::Block,
-    block_retrieval::{BlockRetrievalRequest, BlockRetrievalStatus, MAX_BLOCKS_PER_REQUEST},
+    block_retrieval::{
+        BlockRetrievalRequest, BlockRetrievalResponse, BlockRetrievalStatus, MAX_BLOCKS_PER_REQUEST,
+    },
     common::Author,
     quorum_cert::QuorumCert,
     sync_info::SyncInfo,
 };
-
+use fail::fail_point;
 use rand::{prelude::*, Rng};
 use std::{clone::Clone, cmp::min, sync::Arc, time::Duration};
 
@@ -85,9 +86,6 @@ impl BlockStore {
         self.insert_quorum_cert(sync_info.highest_quorum_cert(), &mut retriever)
             .await?;
 
-        if let Some(tc) = sync_info.highest_timeout_certificate() {
-            self.insert_timeout_certificate(Arc::new(tc.clone()))?;
-        }
         if let Some(tc) = sync_info.highest_2chain_timeout_cert() {
             self.insert_2chain_timeout_certificate(Arc::new(tc.clone()))?;
         }
@@ -179,7 +177,7 @@ impl BlockStore {
         )
         .await?
         .take();
-        debug!(
+        info!(
             LogSchema::new(LogEvent::CommitViaSync).round(self.ordered_root().round()),
             committed_round = root.0.round(),
             block_id = root.0.id(),
@@ -206,7 +204,7 @@ impl BlockStore {
         storage: Arc<dyn PersistentLivenessStorage>,
         state_computer: Arc<dyn StateComputer>,
     ) -> anyhow::Result<RecoveryData> {
-        debug!(
+        info!(
             LogSchema::new(LogEvent::StateSync).remote_peer(retriever.preferred_peer),
             "Start state sync with peer to block: {}",
             highest_ordered_cert.commit_info(),
@@ -279,6 +277,50 @@ impl BlockStore {
         {
             network.notify_commit_proof(ledger_info.clone()).await
         }
+    }
+
+    /// Retrieve a n chained blocks from the block store starting from
+    /// an initial parent id, returning with <n (as many as possible) if
+    /// id or its ancestors can not be found.
+    ///
+    /// The current version of the function is not really async, but keeping it this way for
+    /// future possible changes.
+    pub async fn process_block_retrieval(
+        &self,
+        request: IncomingBlockRetrievalRequest,
+    ) -> anyhow::Result<()> {
+        fail_point!("consensus::process_block_retrieval", |_| {
+            Err(anyhow::anyhow!("Injected error in process_block_retrieval"))
+        });
+        let mut blocks = vec![];
+        let mut status = BlockRetrievalStatus::Succeeded;
+        let mut id = request.req.block_id();
+        while (blocks.len() as u64) < request.req.num_blocks() {
+            if let Some(executed_block) = self.get_block(id) {
+                blocks.push(executed_block.block().clone());
+                if request.req.match_target_id(id) {
+                    status = BlockRetrievalStatus::SucceededWithTarget;
+                    break;
+                }
+                id = executed_block.parent_id();
+            } else {
+                status = BlockRetrievalStatus::NotEnoughBlocks;
+                break;
+            }
+        }
+
+        if blocks.is_empty() {
+            status = BlockRetrievalStatus::IdNotFound;
+        }
+
+        let response = Box::new(BlockRetrievalResponse::new(status, blocks));
+        let response_bytes = request
+            .protocol
+            .to_bytes(&ConsensusMsg::BlockRetrievalResponse(response))?;
+        request
+            .response_sender
+            .send(Ok(response_bytes.into()))
+            .map_err(|e| anyhow::anyhow!("{:?}", e))
     }
 }
 
@@ -430,7 +472,7 @@ impl BlockRetriever {
             return self.preferred_peer;
         }
 
-        let peer_idx = thread_rng().gen_range(0..peers.len());
+        let peer_idx = thread_rng().gen_range(0, peers.len());
         *peers.remove(peer_idx)
     }
 }

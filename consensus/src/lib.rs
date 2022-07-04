@@ -13,8 +13,8 @@
 #![recursion_limit = "512"]
 
 mod block_storage;
+mod commit_notifier;
 mod consensusdb;
-mod counters;
 mod epoch_manager;
 mod error;
 mod experimental;
@@ -24,8 +24,10 @@ mod metrics_safety_rules;
 mod network;
 #[cfg(test)]
 mod network_tests;
+mod payload_manager;
 mod pending_votes;
 mod persistent_liveness_storage;
+mod quorum_store;
 mod round_manager;
 mod state_computer;
 mod state_replication;
@@ -33,11 +35,13 @@ mod state_replication;
 mod test_utils;
 #[cfg(test)]
 mod twins;
-mod txn_manager;
+mod txn_notifier;
 mod util;
 
 /// AptosBFT implementation
 pub mod consensus_provider;
+/// Required by the telemetry service
+pub mod counters;
 /// AptosNet interface.
 pub mod network_interface;
 

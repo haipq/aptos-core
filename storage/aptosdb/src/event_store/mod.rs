@@ -22,13 +22,9 @@ use aptos_crypto::{
     HashValue,
 };
 use aptos_types::{
-    account_address::AccountAddress,
-    account_config::NewBlockEvent,
-    block_metadata::new_block_event_key,
-    contract_event::ContractEvent,
-    event::EventKey,
-    proof::{position::Position, EventAccumulatorProof, EventProof},
-    transaction::Version,
+    account_address::AccountAddress, account_config::NewBlockEvent,
+    block_metadata::new_block_event_key, contract_event::ContractEvent, event::EventKey,
+    proof::position::Position, transaction::Version,
 };
 use schemadb::{schema::ValueCodec, ReadOptions, SchemaBatch, SchemaIterator, DB};
 use std::{
@@ -84,7 +80,7 @@ impl EventStore {
         })
     }
 
-    fn get_event_by_version_and_index(
+    pub fn get_event_by_version_and_index(
         &self,
         version: Version,
         index: u64,
@@ -94,30 +90,6 @@ impl EventStore {
             .ok_or_else(|| {
                 AptosDbError::NotFound(format!("Event {} of Txn {}", index, version)).into()
             })
-    }
-
-    /// Get the event raw data given transaction version and the index of the event queried.
-    pub fn get_event_with_proof_by_version_and_index(
-        &self,
-        version: Version,
-        index: u64,
-    ) -> Result<(ContractEvent, EventAccumulatorProof)> {
-        // Get event content.
-        let event = self.get_event_by_version_and_index(version, index)?;
-
-        // Get the number of events in total for the transaction at `version`.
-        let mut iter = self.db.iter::<EventSchema>(ReadOptions::default())?;
-        iter.seek_for_prev(&(version + 1))?;
-        let num_events = match iter.next().transpose()? {
-            Some(((ver, index), _)) if ver == version => (index + 1),
-            _ => unreachable!(), // since we've already got at least one event above
-        };
-
-        // Get proof.
-        let proof =
-            Accumulator::get_proof(&EventHashReader::new(self, version), num_events, index)?;
-
-        Ok((event, proof))
     }
 
     pub fn get_txn_ver_by_seq_num(&self, event_key: &EventKey, seq_num: u64) -> Result<u64> {
@@ -392,19 +364,47 @@ impl EventStore {
     }
 
     /// Prunes events by accumulator store for a range of version in [begin, end)
-    pub fn prune_event_accumulator(
+    fn prune_event_accumulator(
         &self,
         begin: Version,
         end: Version,
         db_batch: &mut SchemaBatch,
     ) -> anyhow::Result<()> {
-        db_batch.delete_range::<EventAccumulatorSchema>(
-            &(begin, Position::from_inorder_index(0)),
-            &(end, Position::from_inorder_index(0)),
-        )
+        let mut iter = self.db.iter::<EventAccumulatorSchema>(Default::default())?;
+        iter.seek(&(begin, Position::from_inorder_index(0)))?;
+        while let Some(((version, position), _)) = iter.next().transpose()? {
+            if version >= end {
+                return Ok(());
+            }
+            db_batch.delete::<EventAccumulatorSchema>(&(version, position))?;
+        }
+        Ok(())
     }
 
-    /// Prunes events by version store for a set of events in version range [begin, end)
+    /// Prune a set of candidate events in the range of version in [begin, end) and all related indices
+    pub fn prune_events(
+        &self,
+        start: Version,
+        end: Version,
+        db_batch: &mut SchemaBatch,
+    ) -> anyhow::Result<()> {
+        let mut current_version = start;
+        for events in self.get_events_by_version_iter(start, (end - start) as usize)? {
+            for (current_index, event) in (events?).into_iter().enumerate() {
+                db_batch.delete::<EventByVersionSchema>(&(
+                    *event.key(),
+                    current_version as u64,
+                    event.sequence_number(),
+                ))?;
+                db_batch.delete::<EventByKeySchema>(&(*event.key(), event.sequence_number()))?;
+                db_batch.delete::<EventSchema>(&(current_version as u64, current_index as u64))?;
+            }
+            current_version += 1;
+        }
+        self.prune_event_accumulator(start, end, db_batch)?;
+        Ok(())
+    }
+
     pub fn prune_events_by_version(
         &self,
         event_keys: HashSet<EventKey>,

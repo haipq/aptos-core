@@ -16,16 +16,14 @@ use aptos_types::{
     on_chain_config::{config_address, ConfigurationResource},
     state_store::state_key::StateKey,
     timestamp::TimestampResource,
-    transaction::Transaction,
+    transaction::{Transaction, Version},
     waypoint::Waypoint,
 };
 use aptos_vm::VMExecutor;
 use executor_types::ExecutedChunk;
 use move_deps::move_core_types::move_resource::MoveResource;
 use std::{collections::btree_map::BTreeMap, sync::Arc};
-use storage_interface::{
-    verified_state_view::VerifiedStateView, DbReaderWriter, DbWriter, TreeState,
-};
+use storage_interface::{cached_state_view::CachedStateView, DbReaderWriter, DbWriter, TreeState};
 
 pub fn generate_waypoint<V: VMExecutor>(
     db: &DbReaderWriter,
@@ -67,11 +65,16 @@ pub fn maybe_bootstrap<V: VMExecutor>(
 pub struct GenesisCommitter {
     db: Arc<dyn DbWriter>,
     output: ExecutedChunk,
+    base_state_version: Option<Version>,
     waypoint: Waypoint,
 }
 
 impl GenesisCommitter {
-    pub fn new(db: Arc<dyn DbWriter>, output: ExecutedChunk) -> Result<Self> {
+    pub fn new(
+        db: Arc<dyn DbWriter>,
+        output: ExecutedChunk,
+        base_state_version: Option<Version>,
+    ) -> Result<Self> {
         let ledger_info = output
             .ledger_info
             .as_ref()
@@ -83,6 +86,7 @@ impl GenesisCommitter {
             db,
             output,
             waypoint,
+            base_state_version,
         })
     }
 
@@ -94,6 +98,7 @@ impl GenesisCommitter {
         self.db.save_transactions(
             &self.output.transactions_to_commit()?,
             self.output.result_view.txn_accumulator().version(),
+            self.base_state_version,
             self.output.ledger_info.as_ref(),
         )?;
         info!("Genesis commited.");
@@ -114,7 +119,7 @@ pub fn calculate_genesis<V: VMExecutor>(
     let genesis_version = tree_state.num_transactions;
     let base_view = tree_state.into_ledger_view(&db.reader)?;
     let base_state_view =
-        base_view.state_view(&base_view, StateViewId::Miscellaneous, db.reader.clone());
+        base_view.verified_state_view(StateViewId::Miscellaneous, db.reader.clone())?;
 
     let epoch = if genesis_version == 0 {
         GENESIS_EPOCH
@@ -134,11 +139,9 @@ pub fn calculate_genesis<V: VMExecutor>(
         // TODO(aldenhu): fix existing tests before using real timestamp and check on-chain epoch.
         GENESIS_TIMESTAMP_USECS
     } else {
-        let state_view = output.result_view.state_view(
-            &base_view,
-            StateViewId::Miscellaneous,
-            db.reader.clone(),
-        );
+        let state_view = output
+            .result_view
+            .verified_state_view(StateViewId::Miscellaneous, db.reader.clone())?;
         let next_epoch = epoch
             .checked_add(1)
             .ok_or_else(|| format_err!("integer overflow occurred"))?;
@@ -170,7 +173,11 @@ pub fn calculate_genesis<V: VMExecutor>(
     );
     output.ledger_info = Some(ledger_info_with_sigs);
 
-    let committer = GenesisCommitter::new(db.writer.clone(), output)?;
+    let committer = GenesisCommitter::new(
+        db.writer.clone(),
+        output,
+        base_view.state().checkpoint_version,
+    )?;
     info!(
         "Genesis calculated: ledger_info_with_sigs {:?}, waypoint {:?}",
         &committer.output.ledger_info, committer.waypoint,
@@ -178,7 +185,7 @@ pub fn calculate_genesis<V: VMExecutor>(
     Ok(committer)
 }
 
-fn get_state_timestamp(state_view: &VerifiedStateView) -> Result<u64> {
+fn get_state_timestamp(state_view: &CachedStateView) -> Result<u64> {
     let rsrc_bytes = &state_view
         .get_state_value(&StateKey::AccessPath(AccessPath::new(
             aptos_root_address(),
@@ -189,7 +196,7 @@ fn get_state_timestamp(state_view: &VerifiedStateView) -> Result<u64> {
     Ok(rsrc.timestamp.microseconds)
 }
 
-fn get_state_epoch(state_view: &VerifiedStateView) -> Result<u64> {
+fn get_state_epoch(state_view: &CachedStateView) -> Result<u64> {
     let rsrc_bytes = &state_view
         .get_state_value(&StateKey::AccessPath(AccessPath::new(
             config_address(),

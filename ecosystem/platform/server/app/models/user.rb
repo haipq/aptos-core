@@ -4,22 +4,28 @@
 # SPDX-License-Identifier: Apache-2.0
 
 class User < ApplicationRecord
-  include RailsStateMachine::Model
-
   # Include devise modules. Others available are:
   # :lockable, :timeoutable, :recoverable,
   devise :database_authenticatable, :confirmable,
          :rememberable, :trackable, :validatable,
-         :omniauthable, omniauth_providers: %i[discord github],
+         :omniauthable, omniauth_providers: %i[discord github google],
                         authentication_keys: [:username]
 
-  validates :username, uniqueness: { case_sensitive: false }, allow_nil: true
+  USERNAME_REGEX = /\A(?!\A[\-_])(?!.*[\-_]{2,})(?!.*[\-_]\Z)[a-zA-Z0-9\-_]+\Z/
+  USERNAME_REGEX_JS = USERNAME_REGEX.inspect[1..-2].gsub('\\A', '^').gsub('\\Z', '$')
+
+  validates :username, uniqueness: { case_sensitive: false }, length: { minimum: 3, maximum: 20 },
+                       format: { with: User::USERNAME_REGEX }, allow_nil: true
   validates :email, uniqueness: { case_sensitive: false }, format: { with: URI::MailTo::EMAIL_REGEXP }, allow_nil: true
 
   validate_aptos_address :mainnet_address
 
+  validates :terms_accepted, acceptance: true
+
   has_many :authorizations, dependent: :destroy
-  has_one :it1_profile
+  has_one :it2_profile, dependent: :destroy
+  has_one :it2_survey, dependent: :destroy
+  has_many :nfts, dependent: :destroy
 
   def self.from_omniauth(auth, current_user = nil)
     # find an existing user or create a user and authorizations
@@ -60,12 +66,12 @@ class User < ApplicationRecord
   #   end
   # end
 
-  def maybe_send_ait1_registration_complete_email
-    SendRegistrationCompleteEmailJob.perform_now({ user_id: id }) if ait1_registration_complete?
+  def maybe_send_ait2_registration_complete_email
+    SendRegistrationCompleteEmailJob.perform_now({ user_id: id }) if ait2_registration_complete?
   end
 
-  def ait1_registration_complete?
-    kyc_complete? && it1_profile&.validator_verified?
+  def ait2_registration_complete?
+    kyc_complete? && it2_profile&.validator_verified?
   end
 
   def kyc_complete?
@@ -86,26 +92,34 @@ class User < ApplicationRecord
       secret: data['credentials']['secret'],
       refresh_token: data['credentials']['refresh_token'],
       expires_at:,
-      email: data['info']['email'].downcase,
-      profile_url: data['info']['image']
+      email: data.dig('info', 'email')&.downcase,
+      full_name: data.dig('info', 'name'),
+      profile_url: data.dig('info', 'image')
     }
     case data['provider']
     when 'github'
       auth = auth.merge({
-                          username: data['info']['nickname'].downcase,
-                          full_name: data['info']['name']
+                          username: data.dig('info', 'nickname')&.downcase
                         })
     when 'discord'
       raw_info = data['extra']['raw_info']
       auth = auth.merge({
-                          username: "#{raw_info['username'].downcase}##{raw_info['discriminator']}",
-                          full_name: data['info']['name'],
-                          profile_url: data['info']['image']
+                          username: "#{raw_info['username'].downcase}##{raw_info['discriminator']}"
                         })
+    when 'google'
+      # No additional data from Google. But we can trust the email!
+      if !confirmed? && !User.exists?(email: auth[:email])
+        self.email = auth[:email]
+        confirm
+      end
     else
       raise 'Unknown Provider!'
     end
     authorizations.build(auth)
+  end
+
+  def registration_completed?
+    confirmed? && username.present?
   end
 
   private
@@ -115,8 +129,13 @@ class User < ApplicationRecord
     false
   end
 
-  # This is to allow username instead of email login in devise (for aptos admins)
-  def will_save_change_to_email?
-    false
+  # Use mailchimp instead of the default devise confirmation email.
+  def send_confirmation_instructions
+    generate_confirmation_token! unless @raw_confirmation_token
+
+    url_options = Rails.application.config.action_mailer.default_url_options
+    url = Rails.application.routes.url_helpers.user_confirmation_url(**url_options,
+                                                                     confirmation_token: @raw_confirmation_token)
+    SendConfirmEmailJob.perform_now({ user_id: id, template_vars: { CONFIRM_LINK: url } })
   end
 end

@@ -15,7 +15,7 @@ use executor::components::in_memory_state_calculator::IntoLedgerView;
 use fail::fail_point;
 use std::sync::Arc;
 use storage_interface::{
-    state_view::LatestDbStateView, verified_state_view::VerifiedStateView, DbReader,
+    cached_state_view::CachedStateView, state_view::LatestDbStateCheckpointView, DbReader,
 };
 
 #[cfg(test)]
@@ -35,25 +35,26 @@ pub trait TransactionValidation: Send + Sync + Clone {
     fn notify_commit(&mut self);
 }
 
-fn latest_state_view(db_reader: &Arc<dyn DbReader>) -> VerifiedStateView {
+fn latest_state_view(db_reader: &Arc<dyn DbReader>) -> CachedStateView {
     let ledger_view = db_reader
         .get_latest_tree_state()
         .expect("Should not fail.")
         .into_ledger_view(db_reader)
         .expect("Should not fail.");
 
-    ledger_view.state_view(
-        &ledger_view,
-        StateViewId::TransactionValidation {
-            base_version: ledger_view.version().expect("Must be bootstrapped."),
-        },
-        db_reader.clone(),
-    )
+    ledger_view
+        .state_view(
+            StateViewId::TransactionValidation {
+                base_version: ledger_view.version().expect("Must be bootstrapped."),
+            },
+            db_reader.clone(),
+        )
+        .expect("failed to get latest state view.")
 }
 
 pub struct VMValidator {
     db_reader: Arc<dyn DbReader>,
-    cached_state_view: VerifiedStateView,
+    cached_state_view: CachedStateView,
     vm: AptosVM,
 }
 
@@ -112,7 +113,7 @@ pub fn get_account_sequence_number(
             "Injected error in get_account_sequence_number"
         ))
     });
-    let db_state_view = storage.latest_state_view()?;
+    let db_state_view = storage.latest_state_checkpoint_view()?;
 
     let account_state_view = db_state_view.as_account_with_state_view(&address);
 

@@ -1,6 +1,8 @@
 // Copyright (c) Aptos
 // SPDX-License-Identifier: Apache-2.0
 
+extern crate core;
+
 // Defines Forge Tests
 pub mod aptos;
 pub mod fullnode;
@@ -11,6 +13,8 @@ pub mod transaction;
 
 // Converted to local Forge backend
 #[cfg(test)]
+mod aptos_cli;
+#[cfg(test)]
 mod client;
 #[cfg(test)]
 mod consensus;
@@ -20,6 +24,8 @@ mod full_nodes;
 mod network;
 #[cfg(test)]
 mod operational_tooling;
+#[cfg(test)]
+mod rosetta;
 #[cfg(test)]
 mod state_sync;
 #[cfg(test)]

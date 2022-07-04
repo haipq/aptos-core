@@ -73,6 +73,8 @@ pub struct NodeConfig {
     #[serde(default)]
     pub metrics: DeprecatedConfig,
     #[serde(default)]
+    pub peer_monitoring_service: PeerMonitoringServiceConfig,
+    #[serde(default)]
     pub api: ApiConfig,
     #[serde(default)]
     pub state_sync: StateSyncConfig,
@@ -89,7 +91,7 @@ pub struct NodeConfig {
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct BaseConfig {
-    data_dir: PathBuf,
+    pub data_dir: PathBuf,
     pub role: RoleType,
     pub waypoint: WaypointConfig,
 }
@@ -168,12 +170,12 @@ pub struct IdentityBlob {
     pub account_address: Option<AccountAddress>,
     /// Optional account key.  Only used for validators
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub account_key: Option<Ed25519PrivateKey>,
+    pub account_private_key: Option<Ed25519PrivateKey>,
     /// Optional consensus key.  Only used for validators
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub consensus_key: Option<Ed25519PrivateKey>,
+    pub consensus_private_key: Option<Ed25519PrivateKey>,
     /// Network private key.  Peer id is derived from this if account address is not present
-    pub network_key: x25519::PrivateKey,
+    pub network_private_key: x25519::PrivateKey,
 }
 
 impl IdentityBlob {
@@ -332,19 +334,18 @@ impl NodeConfig {
         Self::random_with_template(0, &NodeConfig::default(), &mut rng)
     }
 
-    pub fn random_with_template(idx: u32, template: &Self, rng: &mut StdRng) -> Self {
+    pub fn random_with_template(_idx: u32, template: &Self, rng: &mut StdRng) -> Self {
         let mut config = template.clone();
-        config.random_internal(idx, rng);
+        config.random_internal(rng);
         config
     }
 
-    fn random_internal(&mut self, idx: u32, rng: &mut StdRng) {
+    fn random_internal(&mut self, rng: &mut StdRng) {
         let mut test = TestConfig::new_with_temp_dir(None);
 
         if self.base.role == RoleType::Validator {
             test.random_account_key(rng);
-            let peer_id =
-                crate::utils::validator_owner_account_from_name(idx.to_string().as_bytes());
+            let peer_id = test.auth_key.unwrap().derived_address();
 
             if self.validator_network.is_none() {
                 let network_config = NetworkConfig::network_with_id(NetworkId::Validator);

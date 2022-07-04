@@ -77,7 +77,7 @@ impl StateSyncMultiplexer {
         streaming_service_client: StreamingServiceClient,
     ) -> Self {
         // Notify subscribers of the initial on-chain config values
-        match (&*storage.reader).fetch_synced_version() {
+        match (&*storage.reader).fetch_latest_state_checkpoint_version() {
             Ok(synced_version) => {
                 if let Err(error) =
                     event_subscription_service.notify_initial_configs(synced_version)
@@ -170,7 +170,7 @@ mod tests {
     };
     use aptos_crypto::HashValue;
     use aptos_data_client::aptosnet::AptosNetDataClient;
-    use aptos_genesis_tool::test_config;
+    use aptos_genesis::test_utils::test_config;
     use aptos_infallible::RwLock;
     use aptos_temppath::TempPath;
     use aptos_time_service::TimeService;
@@ -232,6 +232,7 @@ mod tests {
         );
         let (aptos_data_client, _) = AptosNetDataClient::new(
             node_config.state_sync.aptos_data_client,
+            node_config.base.clone(),
             node_config.state_sync.storage_service,
             TimeService::mock(),
             network_client,

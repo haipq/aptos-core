@@ -1,12 +1,13 @@
 // Copyright (c) Aptos
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::sync::{atomic::AtomicU64, Arc};
 
 use aptos_crypto::HashValue;
 use aptos_types::{ledger_info::LedgerInfo, validator_verifier::random_validator_verifier};
 use consensus_types::{
     block::{block_test_utils::certificate_for_genesis, Block},
+    common::Payload,
     executed_block::ExecutedBlock,
     quorum_cert::QuorumCert,
 };
@@ -35,7 +36,14 @@ fn add_execution_phase_test_cases(
 ) {
     let genesis_qc = certificate_for_genesis();
     let (signers, _validators) = random_validator_verifier(1, None, false);
-    let block = Block::new_proposal(vec![], 1, 1, genesis_qc, &signers[0]);
+    let block = Block::new_proposal(
+        Payload::new_empty(),
+        1,
+        1,
+        genesis_qc,
+        &signers[0],
+        Vec::new(),
+    );
 
     // happy path
     phase_tester.add_test_case(
@@ -63,7 +71,8 @@ fn add_execution_phase_test_cases(
         &LedgerInfo::mock_genesis(None),
         random_hash_value,
     );
-    let bad_block = Block::new_proposal(vec![], 1, 1, bad_qc, &signers[0]);
+    let bad_block =
+        Block::new_proposal(Payload::new_empty(), 1, 1, bad_qc, &signers[0], Vec::new());
     phase_tester.add_test_case(
         ExecutionRequest {
             ordered_blocks: vec![ExecutedBlock::new(
@@ -93,6 +102,7 @@ fn execution_phase_tests() {
         in_channel_rx,
         Some(out_channel_tx),
         Box::new(execution_phase),
+        Arc::new(AtomicU64::new(0)),
     );
 
     runtime.spawn(execution_phase_pipeline.start());

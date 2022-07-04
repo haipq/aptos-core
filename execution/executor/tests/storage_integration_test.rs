@@ -1,7 +1,7 @@
 // Copyright (c) Aptos
 // SPDX-License-Identifier: Apache-2.0
 
-use aptos_crypto::PrivateKey;
+use aptos_crypto::{hash::CryptoHash, PrivateKey};
 use aptos_state_view::account_with_state_view::AsAccountWithStateView;
 use aptos_transaction_builder::aptos_stdlib;
 use aptos_types::{
@@ -32,15 +32,9 @@ fn test_genesis() {
     let (_, db, _executor, waypoint) = create_db_and_executor(path.path(), &genesis);
 
     let trusted_state = TrustedState::from_epoch_waypoint(waypoint);
-    let initial_accumulator = db
-        .reader
-        .get_accumulator_summary(trusted_state.version())
-        .unwrap();
     let state_proof = db.reader.get_state_proof(trusted_state.version()).unwrap();
 
-    trusted_state
-        .verify_and_ratchet(&state_proof, Some(&initial_accumulator))
-        .unwrap();
+    trusted_state.verify_and_ratchet(&state_proof).unwrap();
     let li = state_proof.latest_ledger_info();
     assert_eq!(li.version(), 0);
 
@@ -48,12 +42,22 @@ fn test_genesis() {
         aptos_root_address(),
         AccountResource::struct_tag().access_vector(),
     ));
-    let aptos_root_account_resource = db
+    let (aptos_root_account_resource, state_proof) = db
         .reader
-        .get_state_value_with_proof(account_resource_path.clone(), 0, 0)
+        .get_state_value_with_proof_by_version(&account_resource_path, 0)
         .unwrap();
-    aptos_root_account_resource
-        .verify(li, 0, account_resource_path)
+    let (txn_info_version, txn_info) = db
+        .reader
+        .get_latest_transaction_info_option()
+        .unwrap()
+        .unwrap();
+    assert_eq!(txn_info_version, 0);
+    state_proof
+        .verify(
+            txn_info.state_checkpoint_hash().unwrap(),
+            account_resource_path.hash(),
+            aptos_root_account_resource.as_ref(),
+        )
         .unwrap();
 }
 
@@ -117,6 +121,7 @@ fn test_reconfiguration() {
         1,
         vec![false],
         validator_account,
+        vec![],
         300000001,
     ));
 

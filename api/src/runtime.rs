@@ -29,11 +29,11 @@ pub fn bootstrap(
         .build()
         .expect("[api] failed to create runtime");
 
-    let api_config = config.api.clone();
-    let api = WebServer::from(api_config.clone());
+    let api = WebServer::from(config.api.clone());
+    let node_config = config.clone();
 
     runtime.spawn(async move {
-        let context = Context::new(chain_id, db, mp_sender, api_config);
+        let context = Context::new(chain_id, db, mp_sender, node_config);
         let routes = index::routes(context);
         api.serve(routes).await;
     });
@@ -41,7 +41,7 @@ pub fn bootstrap(
 }
 
 #[derive(Clone, Debug, PartialEq)]
-struct WebServer {
+pub struct WebServer {
     pub address: SocketAddr,
     pub tls_cert_path: Option<String>,
     pub tls_key_path: Option<String>,

@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    jellyfish_merkle_node::JellyfishMerkleNodeSchema, metrics::APTOS_PRUNER_LEAST_READABLE_VERSION,
-    pruner::db_pruner::DBPruner, stale_node_index::StaleNodeIndexSchema,
-    APTOS_STORAGE_OTHER_TIMERS_SECONDS,
+    jellyfish_merkle_node::JellyfishMerkleNodeSchema, metrics::PRUNER_LEAST_READABLE_VERSION,
+    pruner::db_pruner::DBPruner, stale_node_index::StaleNodeIndexSchema, OTHER_TIMERS_SECONDS,
 };
 use aptos_infallible::Mutex;
 use aptos_jellyfish_merkle::StaleNodeIndex;
@@ -28,7 +27,7 @@ pub struct StateStorePruner {
     index_purged_at: Mutex<Instant>,
     /// Keeps track of the target version that the pruner needs to achieve.
     target_version: AtomicVersion,
-    least_readable_version: AtomicVersion,
+    min_readable_version: AtomicVersion,
 }
 
 impl DBPruner for StateStorePruner {
@@ -36,17 +35,24 @@ impl DBPruner for StateStorePruner {
         STATE_STORE_PRUNER_NAME
     }
 
-    fn prune(&self, _db_batch: &mut SchemaBatch, max_versions: u64) -> anyhow::Result<Version> {
-        let least_readable_version = self.least_readable_version.load(Ordering::Relaxed);
+    fn prune(
+        &self,
+        _ledger_db_batch: &mut SchemaBatch,
+        max_versions: u64,
+    ) -> anyhow::Result<Version> {
+        if !self.is_pruning_pending() {
+            return Ok(self.min_readable_version());
+        }
+        let min_readable_version = self.min_readable_version.load(Ordering::Relaxed);
         let target_version = self.target_version();
         return match prune_state_store(
-            self.db.clone(),
-            least_readable_version,
+            &self.db,
+            min_readable_version,
             target_version,
             max_versions as usize,
         ) {
-            Ok(new_least_readable_version) => {
-                self.record_progress(new_least_readable_version);
+            Ok(new_min_readable_version) => {
+                self.record_progress(new_min_readable_version);
                 // Try to purge the log.
                 if let Err(e) = self.maybe_purge_index() {
                     warn!(
@@ -54,7 +60,7 @@ impl DBPruner for StateStorePruner {
                         "Failed purging state node index, ignored.",
                     );
                 }
-                Ok(new_least_readable_version)
+                Ok(new_min_readable_version)
             }
             Err(e) => {
                 error!(
@@ -67,7 +73,7 @@ impl DBPruner for StateStorePruner {
         };
     }
 
-    fn initialize_least_readable_version(&self) -> anyhow::Result<Version> {
+    fn initialize_min_readable_version(&self) -> anyhow::Result<Version> {
         let mut iter = self
             .db
             .iter::<StaleNodeIndexSchema>(ReadOptions::default())?;
@@ -80,8 +86,8 @@ impl DBPruner for StateStorePruner {
         }))
     }
 
-    fn least_readable_version(&self) -> Version {
-        self.least_readable_version.load(Ordering::Relaxed)
+    fn min_readable_version(&self) -> Version {
+        self.min_readable_version.load(Ordering::Relaxed)
     }
 
     fn set_target_version(&self, target_version: Version) {
@@ -92,12 +98,12 @@ impl DBPruner for StateStorePruner {
         self.target_version.load(Ordering::Relaxed)
     }
 
-    fn record_progress(&self, least_readable_version: Version) {
-        self.least_readable_version
-            .store(least_readable_version, Ordering::Relaxed);
-        APTOS_PRUNER_LEAST_READABLE_VERSION
+    fn record_progress(&self, min_readable_version: Version) {
+        self.min_readable_version
+            .store(min_readable_version, Ordering::Relaxed);
+        PRUNER_LEAST_READABLE_VERSION
             .with_label_values(&["state_store"])
-            .set(least_readable_version as i64);
+            .set(min_readable_version as i64);
     }
 }
 
@@ -107,13 +113,15 @@ impl StateStorePruner {
         index_min_nonpurged_version: Version,
         index_purged_at: Instant,
     ) -> Self {
-        StateStorePruner {
+        let pruner = StateStorePruner {
             db,
             index_min_nonpurged_version: AtomicVersion::new(index_min_nonpurged_version),
             index_purged_at: Mutex::new(index_purged_at),
             target_version: AtomicVersion::new(0),
-            least_readable_version: AtomicVersion::new(0),
-        }
+            min_readable_version: AtomicVersion::new(0),
+        };
+        pruner.initialize();
+        pruner
     }
 
     /// Purge the stale node index so that after restart not too much already pruned stuff is dealt
@@ -129,14 +137,19 @@ impl StateStorePruner {
         // least 60000 versions (assuming the pruner deletes as slow as 1000 versions per second,
         // this imposes at most one minute of work in vain after restarting.)
         let now = Instant::now();
+        if self.min_readable_version.load(Ordering::Relaxed) < self.index_min_nonpurged_version() {
+            warn!("State pruner inconsistent, min_readable_version is {} and  index_min_non-purged_version is {}",
+                self.min_readable_version.load(Ordering::Relaxed), self.index_min_nonpurged_version());
+            return Ok(());
+        }
+
         if now - *self.index_purged_at.lock() > MIN_INTERVAL
-            && self.least_readable_version.load(Ordering::Relaxed)
+            && self.min_readable_version.load(Ordering::Relaxed)
                 - self.index_min_nonpurged_version()
                 + 1
                 > MIN_VERSIONS
         {
-            let new_min_non_purged_version =
-                self.least_readable_version.load(Ordering::Relaxed) + 1;
+            let new_min_non_purged_version = self.min_readable_version.load(Ordering::Relaxed) + 1;
             self.db.range_delete::<StaleNodeIndexSchema, Version>(
                 &self.index_min_nonpurged_version(),
                 &new_min_non_purged_version, // end is exclusive
@@ -158,52 +171,51 @@ impl StateStorePruner {
 }
 
 pub fn prune_state_store(
-    db: Arc<DB>,
-    least_readable_version: Version,
+    db: &DB,
+    min_readable_version: Version,
     target_version: Version,
     max_versions: usize,
 ) -> anyhow::Result<Version> {
-    let indices =
-        StaleNodeIndicesByVersionIterator::new(&db, least_readable_version, target_version)?
-            .take(max_versions) // Iterator<Item = Result<Vec<StaleNodeIndex>>>
-            .collect::<anyhow::Result<Vec<_>>>()? // now Vec<Vec<StaleNodeIndex>>
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
+    let indices = StaleNodeIndicesByVersionIterator::new(db, min_readable_version, target_version)?
+        .take(max_versions) // Iterator<Item = Result<Vec<StaleNodeIndex>>>
+        .collect::<anyhow::Result<Vec<_>>>()? // now Vec<Vec<StaleNodeIndex>>
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
 
     if indices.is_empty() {
-        Ok(least_readable_version)
+        Ok(min_readable_version)
     } else {
-        let _timer = APTOS_STORAGE_OTHER_TIMERS_SECONDS
+        let _timer = OTHER_TIMERS_SECONDS
             .with_label_values(&["pruner_commit"])
             .start_timer();
-        let new_least_readable_version = indices.last().expect("Should exist.").stale_since_version;
+        let new_min_readable_version = indices.last().expect("Should exist.").stale_since_version;
         let mut batch = SchemaBatch::new();
         indices
             .into_iter()
             .try_for_each(|index| batch.delete::<JellyfishMerkleNodeSchema>(&index.node_key))?;
         db.write_schemas(batch)?;
-        Ok(new_least_readable_version)
+        Ok(new_min_readable_version)
     }
 }
 
 struct StaleNodeIndicesByVersionIterator<'a> {
     inner: Peekable<SchemaIterator<'a, StaleNodeIndexSchema>>,
-    target_least_readable_version: Version,
+    target_min_readable_version: Version,
 }
 
 impl<'a> StaleNodeIndicesByVersionIterator<'a> {
     fn new(
         db: &'a DB,
-        least_readable_version: Version,
-        target_least_readable_version: Version,
+        min_readable_version: Version,
+        target_min_readable_version: Version,
     ) -> anyhow::Result<Self> {
         let mut iter = db.iter::<StaleNodeIndexSchema>(ReadOptions::default())?;
-        iter.seek(&least_readable_version)?;
+        iter.seek(&min_readable_version)?;
 
         Ok(Self {
             inner: iter.peekable(),
-            target_least_readable_version,
+            target_min_readable_version,
         })
     }
 
@@ -212,7 +224,7 @@ impl<'a> StaleNodeIndicesByVersionIterator<'a> {
             None => Ok(None),
             Some((index, _)) => {
                 let version = index.stale_since_version;
-                if version > self.target_least_readable_version {
+                if version > self.target_min_readable_version {
                     return Ok(None);
                 }
 

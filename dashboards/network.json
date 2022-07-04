@@ -8,15 +8,21 @@
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
         "name": "Annotations & Alerts",
+        "target": {
+          "limit": 100,
+          "matchAny": false,
+          "tags": [],
+          "type": "dashboard"
+        },
         "type": "dashboard"
       }
     ]
   },
   "editable": true,
-  "gnetId": null,
+  "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
-  "id": 74,
-  "iteration": 1620237713364,
+  "id": 4,
+  "iteration": 1653273751829,
   "links": [
     {
       "asDropdown": true,
@@ -28,12 +34,13 @@
       "type": "dashboards"
     }
   ],
+  "liveNow": false,
   "panels": [
     {
       "collapsed": false,
       "datasource": {
-        "uid": "${Datasource}",
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "${Datasource}"
       },
       "gridPos": {
         "h": 1,
@@ -52,13 +59,12 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": {
-        "uid": "${Datasource}",
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "${Datasource}"
       },
       "description": "Total Connected Peers for both inbound and outbound per peer.",
       "fieldConfig": {
         "defaults": {
-          "custom": {},
           "links": []
         },
         "overrides": []
@@ -90,7 +96,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "7.2.0",
+      "pluginVersion": "8.4.4",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -100,18 +106,16 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum by (owner, role_type, network_id) (aptos_connections{chain_name=~\"$chain_name\", network_id=~\"$network_id\", role_type=~\"$role_type\", owner=~\"$owner\"})\n",
+          "expr": "sum by (kubernetes_pod_name, role_type, network_id) (aptos_connections{chain_name=~\"$chain_name\", network_id=~\"$network_id\", role_type=~\"$role_type\", kubernetes_pod_name=~\"$kubernetes_pod_name\"})\n",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "{{owner}}-{{role_type}}-{{network_id}}",
+          "legendFormat": "{{kubernetes_pod_name}}-{{role_type}}-{{network_id}}",
           "refId": "A"
         }
       ],
       "thresholds": [],
-      "timeFrom": null,
       "timeRegions": [],
-      "timeShift": null,
       "title": "Total Connected Peers",
       "tooltip": {
         "shared": true,
@@ -120,33 +124,24 @@
       },
       "type": "graph",
       "xaxis": {
-        "buckets": null,
         "mode": "time",
-        "name": null,
         "show": true,
         "values": []
       },
       "yaxes": [
         {
           "format": "short",
-          "label": null,
           "logBase": 1,
-          "max": null,
-          "min": null,
           "show": true
         },
         {
           "format": "short",
-          "label": null,
           "logBase": 1,
-          "max": null,
-          "min": null,
           "show": true
         }
       ],
       "yaxis": {
-        "align": false,
-        "alignLevel": null
+        "align": false
       }
     },
     {
@@ -155,13 +150,12 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": {
-        "uid": "${Datasource}",
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "${Datasource}"
       },
       "description": "Total Inbound connected peers.  There should be at most one peer with 0 inbound connections.",
       "fieldConfig": {
         "defaults": {
-          "custom": {},
           "links": []
         },
         "overrides": []
@@ -192,7 +186,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "7.2.0",
+      "pluginVersion": "8.4.4",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -202,16 +196,14 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum by (owner, role_type, network_id) (aptos_connections{chain_name=~\"$chain_name\", network_id=~\"$network_id\", role_type=~\"$role_type\", owner=~\"$owner\", direction=\"inbound\"})",
+          "expr": "sum by (kubernetes_pod_name, role_type, network_id) (aptos_connections{chain_name=~\"$chain_name\", network_id=~\"$network_id\", role_type=~\"$role_type\", kubernetes_pod_name=~\"$kubernetes_pod_name\", direction=\"inbound\"})",
           "interval": "",
-          "legendFormat": "{{owner}}-{{role_type}}-{{network_id}}",
+          "legendFormat": "{{kubernetes_pod_name}}-{{role_type}}-{{network_id}}",
           "refId": "A"
         }
       ],
       "thresholds": [],
-      "timeFrom": null,
       "timeRegions": [],
-      "timeShift": null,
       "title": "Inbound Connected Peers",
       "tooltip": {
         "shared": true,
@@ -220,33 +212,24 @@
       },
       "type": "graph",
       "xaxis": {
-        "buckets": null,
         "mode": "time",
-        "name": null,
         "show": true,
         "values": []
       },
       "yaxes": [
         {
           "format": "short",
-          "label": null,
           "logBase": 1,
-          "max": null,
-          "min": null,
           "show": true
         },
         {
           "format": "short",
-          "label": null,
           "logBase": 1,
-          "max": null,
-          "min": null,
           "show": true
         }
       ],
       "yaxis": {
-        "align": false,
-        "alignLevel": null
+        "align": false
       }
     },
     {
@@ -255,13 +238,12 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": {
-        "uid": "${Datasource}",
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "${Datasource}"
       },
       "description": "Total outbound connections per peer.  Every node should have an outbound connection.",
       "fieldConfig": {
         "defaults": {
-          "custom": {},
           "links": []
         },
         "overrides": []
@@ -293,7 +275,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "7.2.0",
+      "pluginVersion": "8.4.4",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -303,16 +285,14 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum by (owner, role_type, network_id)(aptos_connections{chain_name=~\"$chain_name\", network_id=~\"$network_id\", role_type=~\"$role_type\", owner=~\"$owner\", direction=\"outbound\"})",
+          "expr": "sum by (kubernetes_pod_name, role_type, network_id)(aptos_connections{chain_name=~\"$chain_name\", network_id=~\"$network_id\", role_type=~\"$role_type\", kubernetes_pod_name=~\"$kubernetes_pod_name\", direction=\"outbound\"})",
           "interval": "",
-          "legendFormat": "{{owner}}-{{role_type}}-{{network_id}}",
+          "legendFormat": "{{kubernetes_pod_name}}-{{role_type}}-{{network_id}}",
           "refId": "A"
         }
       ],
       "thresholds": [],
-      "timeFrom": null,
       "timeRegions": [],
-      "timeShift": null,
       "title": "Outbound Connected Peers",
       "tooltip": {
         "shared": true,
@@ -321,33 +301,24 @@
       },
       "type": "graph",
       "xaxis": {
-        "buckets": null,
         "mode": "time",
-        "name": null,
         "show": true,
         "values": []
       },
       "yaxes": [
         {
           "format": "short",
-          "label": null,
           "logBase": 1,
-          "max": null,
-          "min": null,
           "show": true
         },
         {
           "format": "short",
-          "label": null,
           "logBase": 1,
-          "max": null,
-          "min": null,
           "show": true
         }
       ],
       "yaxis": {
-        "align": false,
-        "alignLevel": null
+        "align": false
       }
     },
     {
@@ -356,16 +327,10 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": {
-        "uid": "${Datasource}",
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "${Datasource}"
       },
       "description": "Value is > 0 if there is a mismatch between onchain and actual network key on the interface",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {}
-        },
-        "overrides": []
-      },
       "fill": 0,
       "fillGradient": 0,
       "gridPos": {
@@ -392,7 +357,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "7.2.0",
+      "pluginVersion": "8.4.4",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -402,16 +367,14 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum by (owner, role_type, network_id) (aptos_network_key_mismatch{chain_name=~\"$chain_name\", network_id=~\"$network_id\", role_type=~\"$role_type\", owner=~\"$owner\"})",
+          "expr": "sum by (kubernetes_pod_name, role_type, network_id) (aptos_network_key_mismatch{chain_name=~\"$chain_name\", network_id=~\"$network_id\", role_type=~\"$role_type\", kubernetes_pod_name=~\"$kubernetes_pod_name\"})",
           "interval": "",
-          "legendFormat": "{{owner}}-{{role_type}}-{{network_id}}",
+          "legendFormat": "{{kubernetes_pod_name}}-{{role_type}}-{{network_id}}",
           "refId": "A"
         }
       ],
       "thresholds": [],
-      "timeFrom": null,
       "timeRegions": [],
-      "timeShift": null,
       "title": "Network Key Mismatches",
       "tooltip": {
         "shared": true,
@@ -420,40 +383,32 @@
       },
       "type": "graph",
       "xaxis": {
-        "buckets": null,
         "mode": "time",
-        "name": null,
         "show": true,
         "values": []
       },
       "yaxes": [
         {
           "format": "none",
-          "label": null,
           "logBase": 1,
-          "max": null,
           "min": "0",
           "show": true
         },
         {
           "format": "short",
-          "label": null,
           "logBase": 1,
-          "max": null,
-          "min": null,
           "show": false
         }
       ],
       "yaxis": {
-        "align": false,
-        "alignLevel": null
+        "align": false
       }
     },
     {
-      "collapsed": true,
+      "collapsed": false,
       "datasource": {
-        "uid": "${Datasource}",
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "${Datasource}"
       },
       "gridPos": {
         "h": 1,
@@ -472,13 +427,12 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": {
-        "uid": "${Datasource}",
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "${Datasource}"
       },
       "description": "Inbound number of bytes passed through the throttler",
       "fieldConfig": {
         "defaults": {
-          "custom": {},
           "links": []
         },
         "overrides": []
@@ -510,7 +464,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "7.2.0",
+      "pluginVersion": "8.4.4",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -520,16 +474,14 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(aptos_network_rate_limit_sum{chain_name=~\"$chain_name\", metric=\"allowed\", direction=\"inbound\", owner=~\"$owner\"}[$AggInterval])",
+          "expr": "rate(aptos_network_rate_limit_sum{chain_name=~\"$chain_name\", metric=\"allowed\", direction=\"inbound\", kubernetes_pod_name=~\"$kubernetes_pod_name\"}[$AggInterval])",
           "interval": "",
-          "legendFormat": "{{owner}}",
+          "legendFormat": "{{kubernetes_pod_name}}",
           "refId": "A"
         }
       ],
       "thresholds": [],
-      "timeFrom": null,
       "timeRegions": [],
-      "timeShift": null,
       "title": "VFN Public Network Inbound Allowed bytes (bytes/s)",
       "tooltip": {
         "shared": true,
@@ -538,9 +490,7 @@
       },
       "type": "graph",
       "xaxis": {
-        "buckets": null,
         "mode": "time",
-        "name": null,
         "show": true,
         "values": []
       },
@@ -549,22 +499,16 @@
           "format": "Bps",
           "label": "bytes/s",
           "logBase": 1,
-          "max": null,
-          "min": null,
           "show": true
         },
         {
           "format": "short",
-          "label": null,
           "logBase": 1,
-          "max": null,
-          "min": null,
           "show": false
         }
       ],
       "yaxis": {
-        "align": false,
-        "alignLevel": null
+        "align": false
       }
     },
     {
@@ -573,13 +517,12 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": {
-        "uid": "${Datasource}",
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "${Datasource}"
       },
       "description": "Outbound number of bytes passed through the throttler",
       "fieldConfig": {
         "defaults": {
-          "custom": {},
           "links": []
         },
         "overrides": []
@@ -611,7 +554,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "7.2.0",
+      "pluginVersion": "8.4.4",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -621,16 +564,14 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(aptos_network_rate_limit_sum{chain_name=~\"$chain_name\", metric=\"allowed\", direction=\"outbound\", owner=~\"$owner\"}[$AggInterval])",
+          "expr": "rate(aptos_network_rate_limit_sum{chain_name=~\"$chain_name\", metric=\"allowed\", direction=\"outbound\", kubernetes_pod_name=~\"$kubernetes_pod_name\"}[$AggInterval])",
           "interval": "",
-          "legendFormat": "{{owner}}",
+          "legendFormat": "{{kubernetes_pod_name}}",
           "refId": "A"
         }
       ],
       "thresholds": [],
-      "timeFrom": null,
       "timeRegions": [],
-      "timeShift": null,
       "title": "VFN Public Network Outbound Allowed bytes (bytes/s)",
       "tooltip": {
         "shared": true,
@@ -639,9 +580,7 @@
       },
       "type": "graph",
       "xaxis": {
-        "buckets": null,
         "mode": "time",
-        "name": null,
         "show": true,
         "values": []
       },
@@ -650,22 +589,16 @@
           "format": "Bps",
           "label": "bytes/s",
           "logBase": 1,
-          "max": null,
-          "min": null,
           "show": true
         },
         {
           "format": "short",
-          "label": null,
           "logBase": 1,
-          "max": null,
-          "min": null,
           "show": false
         }
       ],
       "yaxis": {
-        "align": false,
-        "alignLevel": null
+        "align": false
       }
     },
     {
@@ -674,13 +607,12 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": {
-        "uid": "${Datasource}",
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "${Datasource}"
       },
       "description": "Inbound number of bytes rate limited through the throttler",
       "fieldConfig": {
         "defaults": {
-          "custom": {},
           "links": []
         },
         "overrides": []
@@ -712,7 +644,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "7.2.0",
+      "pluginVersion": "8.4.4",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -722,16 +654,14 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(aptos_network_rate_limit_sum{chain_name=~\"$chain_name\", metric=\"throttled\", direction=\"inbound\", owner=~\"$owner\"}[$AggInterval])",
+          "expr": "rate(aptos_network_rate_limit_sum{chain_name=~\"$chain_name\", metric=\"throttled\", direction=\"inbound\", kubernetes_pod_name=~\"$kubernetes_pod_name\"}[$AggInterval])",
           "interval": "",
-          "legendFormat": "{{owner}}",
+          "legendFormat": "{{kubernetes_pod_name}}",
           "refId": "A"
         }
       ],
       "thresholds": [],
-      "timeFrom": null,
       "timeRegions": [],
-      "timeShift": null,
       "title": "VFN Public Network Inbound Throttled bytes (bytes/s)",
       "tooltip": {
         "shared": true,
@@ -740,9 +670,7 @@
       },
       "type": "graph",
       "xaxis": {
-        "buckets": null,
         "mode": "time",
-        "name": null,
         "show": true,
         "values": []
       },
@@ -751,22 +679,16 @@
           "format": "Bps",
           "label": "bytes/s",
           "logBase": 1,
-          "max": null,
-          "min": null,
           "show": true
         },
         {
           "format": "short",
-          "label": null,
           "logBase": 1,
-          "max": null,
-          "min": null,
           "show": false
         }
       ],
       "yaxis": {
-        "align": false,
-        "alignLevel": null
+        "align": false
       }
     },
     {
@@ -775,13 +697,12 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": {
-        "uid": "${Datasource}",
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "${Datasource}"
       },
       "description": "Outbound number of bytes rate limited through the throttler",
       "fieldConfig": {
         "defaults": {
-          "custom": {},
           "links": []
         },
         "overrides": []
@@ -813,7 +734,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "7.2.0",
+      "pluginVersion": "8.4.4",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -823,16 +744,14 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(aptos_network_rate_limit_sum{chain_name=~\"$chain_name\", metric=\"throttled\", direction=\"outbound\", owner=~\"$owner\"}[$AggInterval])",
+          "expr": "rate(aptos_network_rate_limit_sum{chain_name=~\"$chain_name\", metric=\"throttled\", direction=\"outbound\", kubernetes_pod_name=~\"$kubernetes_pod_name\"}[$AggInterval])",
           "interval": "",
-          "legendFormat": "{{owner}}",
+          "legendFormat": "{{kubernetes_pod_name}}",
           "refId": "A"
         }
       ],
       "thresholds": [],
-      "timeFrom": null,
       "timeRegions": [],
-      "timeShift": null,
       "title": "VFN Public Network Outbound Throttled bytes (bytes/s)",
       "tooltip": {
         "shared": true,
@@ -841,9 +760,7 @@
       },
       "type": "graph",
       "xaxis": {
-        "buckets": null,
         "mode": "time",
-        "name": null,
         "show": true,
         "values": []
       },
@@ -852,35 +769,413 @@
           "format": "Bps",
           "label": "bytes/s",
           "logBase": 1,
-          "max": null,
-          "min": null,
           "show": true
         },
         {
           "format": "short",
-          "label": null,
           "logBase": 1,
-          "max": null,
-          "min": null,
           "show": false
         }
       ],
       "yaxis": {
-        "align": false,
-        "alignLevel": null
+        "align": false
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${Datasource}"
+      },
+      "description": "Inbound number of bytes received on the network",
+      "fieldConfig": {
+        "defaults": {
+          "links": []
+        },
+        "overrides": []
+      },
+      "fill": 0,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 34
+      },
+      "hiddenSeries": false,
+      "id": 122,
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": false,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
+      "percentage": false,
+      "pluginVersion": "8.4.4",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "exemplar": true,
+          "expr": "rate(aptos_network_app_inbound_traffic_sum{role_type=~\"$role_type\", network_id=~\"$network_id\", kubernetes_pod_name=~\"$kubernetes_pod_name\"}[1m])",
+          "interval": "",
+          "legendFormat": "{{role}}-{{kubernetes_pod_name}}-{{network_id}}-{{protocol_id}}",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeRegions": [],
+      "title": "Network Inbound bytes (bytes/s)",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "mode": "time",
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "Bps",
+          "label": "bytes/s",
+          "logBase": 1,
+          "show": true
+        },
+        {
+          "format": "short",
+          "logBase": 1,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": false
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${Datasource}"
+      },
+      "description": "Outbound number of bytes sent on the network",
+      "fieldConfig": {
+        "defaults": {
+          "links": []
+        },
+        "overrides": []
+      },
+      "fill": 0,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 34
+      },
+      "hiddenSeries": false,
+      "id": 123,
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": false,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
+      "percentage": false,
+      "pluginVersion": "8.4.4",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "exemplar": true,
+          "expr": "rate(aptos_network_app_outbound_traffic_sum{role_type=~\"$role_type\", network_id=~\"$network_id\", kubernetes_pod_name=~\"$kubernetes_pod_name\"}[1m])",
+          "interval": "",
+          "legendFormat": "{{role}}-{{kubernetes_pod_name}}-{{network_id}}-{{protocol_id}}",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeRegions": [],
+      "title": "Network Outbound bytes (bytes/s)",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "mode": "time",
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "Bps",
+          "label": "bytes/s",
+          "logBase": 1,
+          "show": true
+        },
+        {
+          "format": "short",
+          "logBase": 1,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": false
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${Datasource}"
+      },
+      "description": "Inbound number of messages received on the network",
+      "fieldConfig": {
+        "defaults": {
+          "links": []
+        },
+        "overrides": []
+      },
+      "fill": 0,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 42
+      },
+      "hiddenSeries": false,
+      "id": 124,
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": false,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
+      "percentage": false,
+      "pluginVersion": "8.4.4",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "exemplar": true,
+          "expr": "rate(aptos_network_app_inbound_traffic_count{role_type=~\"$role_type\", network_id=~\"$network_id\", kubernetes_pod_name=~\"$kubernetes_pod_name\"}[1m])",
+          "interval": "",
+          "legendFormat": "{{role}}-{{kubernetes_pod_name}}-{{network_id}}-{{protocol_id}}",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeRegions": [],
+      "title": "Network Inbound messages (messages/s)",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "mode": "time",
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:259",
+          "format": "none",
+          "label": "messages/s",
+          "logBase": 1,
+          "show": true
+        },
+        {
+          "$$hashKey": "object:260",
+          "format": "short",
+          "logBase": 1,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": false
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${Datasource}"
+      },
+      "description": "Outbound number of messages sent on the network",
+      "fieldConfig": {
+        "defaults": {
+          "links": []
+        },
+        "overrides": []
+      },
+      "fill": 0,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 42
+      },
+      "hiddenSeries": false,
+      "id": 125,
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": false,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
+      "percentage": false,
+      "pluginVersion": "8.4.4",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "exemplar": true,
+          "expr": "rate(aptos_network_app_outbound_traffic_count{role_type=~\"$role_type\", network_id=~\"$network_id\", kubernetes_pod_name=~\"$kubernetes_pod_name\"}[1m])",
+          "interval": "",
+          "legendFormat": "{{role}}-{{kubernetes_pod_name}}-{{network_id}}-{{protocol_id}}",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeRegions": [],
+      "title": "Network Outbound messages (messages/s)",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "mode": "time",
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:259",
+          "format": "none",
+          "label": "messages/s",
+          "logBase": 1,
+          "show": true
+        },
+        {
+          "$$hashKey": "object:260",
+          "format": "short",
+          "logBase": 1,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": false
       }
     },
     {
       "collapsed": true,
       "datasource": {
-        "uid": "${Datasource}",
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "${Datasource}"
       },
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 34
+        "y": 50
       },
       "id": 76,
       "panels": [
@@ -890,8 +1185,8 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": {
-            "uid": "${Datasource}",
-            "type": "prometheus"
+            "type": "prometheus",
+            "uid": "${Datasource}"
           },
           "description": "TBD",
           "fieldConfig": {
@@ -939,16 +1234,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (owner, role)(aptos_network_pending_network_notifications{chain_name=~\"$chain_name\", owner=~\"$owner\",role=~\"$role_type\",state=\"enqueued\"}) - sum by (owner, role)(aptos_network_pending_network_notifications{chain_name=~\"$chain_name\", owner=~\"$owner\",role=~\"$role_type\",state=\"dequeued\"})",
+              "expr": "sum by (kubernetes_pod_name, role)(aptos_network_pending_network_notifications{chain_name=~\"$chain_name\", kubernetes_pod_name=~\"$kubernetes_pod_name\",role=~\"$role_type\",state=\"enqueued\"}) - sum by (kubernetes_pod_name, role)(aptos_network_pending_network_notifications{chain_name=~\"$chain_name\", kubernetes_pod_name=~\"$kubernetes_pod_name\",role=~\"$role_type\",state=\"dequeued\"})",
               "interval": "",
-              "legendFormat": "{{owner}}-{{role}}",
+              "legendFormat": "{{kubernetes_pod_name}}-{{role}}",
               "refId": "A"
             }
           ],
           "thresholds": [],
-          "timeFrom": null,
           "timeRegions": [],
-          "timeShift": null,
           "title": "Network Notifications Queued",
           "tooltip": {
             "shared": true,
@@ -957,9 +1250,7 @@
           },
           "type": "graph",
           "xaxis": {
-            "buckets": null,
             "mode": "time",
-            "name": null,
             "show": true,
             "values": []
           },
@@ -968,22 +1259,16 @@
               "format": "none",
               "label": "",
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             },
             {
               "format": "short",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             }
           ],
           "yaxis": {
-            "align": false,
-            "alignLevel": null
+            "align": false
           }
         },
         {
@@ -992,8 +1277,8 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": {
-            "uid": "${Datasource}",
-            "type": "prometheus"
+            "type": "prometheus",
+            "uid": "${Datasource}"
           },
           "description": "TBD",
           "fieldConfig": {
@@ -1041,16 +1326,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (owner, role)(aptos_network_pending_peer_manager_requests{chain_name=~\"$chain_name\", owner=~\"$owner\",role=~\"$role_type\",state=\"enqueued\"}) - sum by (owner, role)(aptos_network_pending_peer_manager_requests{chain_name=~\"$chain_name\", owner=~\"$owner\",role=~\"$role_type\",state=\"dequeued\"})",
+              "expr": "sum by (kubernetes_pod_name, role)(aptos_network_pending_peer_manager_requests{chain_name=~\"$chain_name\", kubernetes_pod_name=~\"$kubernetes_pod_name\",role=~\"$role_type\",state=\"enqueued\"}) - sum by (kubernetes_pod_name, role)(aptos_network_pending_peer_manager_requests{chain_name=~\"$chain_name\", kubernetes_pod_name=~\"$kubernetes_pod_name\",role=~\"$role_type\",state=\"dequeued\"})",
               "interval": "",
-              "legendFormat": "{{owner}}-{{role}}",
+              "legendFormat": "{{kubernetes_pod_name}}-{{role}}",
               "refId": "B"
             }
           ],
           "thresholds": [],
-          "timeFrom": null,
           "timeRegions": [],
-          "timeShift": null,
           "title": "Peer Manager Requests Queued",
           "tooltip": {
             "shared": true,
@@ -1059,9 +1342,7 @@
           },
           "type": "graph",
           "xaxis": {
-            "buckets": null,
             "mode": "time",
-            "name": null,
             "show": true,
             "values": []
           },
@@ -1070,22 +1351,16 @@
               "format": "none",
               "label": "",
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             },
             {
               "format": "short",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             }
           ],
           "yaxis": {
-            "align": false,
-            "alignLevel": null
+            "align": false
           }
         },
         {
@@ -1094,8 +1369,8 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": {
-            "uid": "${Datasource}",
-            "type": "prometheus"
+            "type": "prometheus",
+            "uid": "${Datasource}"
           },
           "description": "TBD",
           "fieldConfig": {
@@ -1143,16 +1418,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (owner, role)(aptos_network_pending_requests{chain_name=~\"$chain_name\", owner=~\"$owner\",role=~\"$role_type\",state=\"enqueued\"}) - sum by (owner, role)(aptos_network_pending_requests{chain_name=~\"$chain_name\", owner=~\"$owner\",role=~\"$role_type\",state=\"dequeued\"})",
+              "expr": "sum by (kubernetes_pod_name, role)(aptos_network_pending_requests{chain_name=~\"$chain_name\", kubernetes_pod_name=~\"$kubernetes_pod_name\",role=~\"$role_type\",state=\"enqueued\"}) - sum by (kubernetes_pod_name, role)(aptos_network_pending_requests{chain_name=~\"$chain_name\", kubernetes_pod_name=~\"$kubernetes_pod_name\",role=~\"$role_type\",state=\"dequeued\"})",
               "interval": "",
-              "legendFormat": "{{owner}}-{{role}}",
+              "legendFormat": "{{kubernetes_pod_name}}-{{role}}",
               "refId": "A"
             }
           ],
           "thresholds": [],
-          "timeFrom": null,
           "timeRegions": [],
-          "timeShift": null,
           "title": "Network Requests Queued",
           "tooltip": {
             "shared": true,
@@ -1161,9 +1434,7 @@
           },
           "type": "graph",
           "xaxis": {
-            "buckets": null,
             "mode": "time",
-            "name": null,
             "show": true,
             "values": []
           },
@@ -1172,22 +1443,16 @@
               "format": "none",
               "label": "",
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             },
             {
               "format": "short",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             }
           ],
           "yaxis": {
-            "align": false,
-            "alignLevel": null
+            "align": false
           }
         },
         {
@@ -1196,8 +1461,8 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": {
-            "uid": "${Datasource}",
-            "type": "prometheus"
+            "type": "prometheus",
+            "uid": "${Datasource}"
           },
           "description": "TBD",
           "fieldConfig": {
@@ -1245,16 +1510,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (owner, role)(aptos_network_pending_health_check_events{chain_name=~\"$chain_name\", owner=~\"$owner\",role=~\"$role_type\",state=\"enqueued\"}) - sum by (owner, role)(aptos_network_pending_health_check_events{chain_name=~\"$chain_name\", owner=~\"$owner\",role=~\"$role_type\",state=\"dequeued\"})",
+              "expr": "sum by (kubernetes_pod_name, role)(aptos_network_pending_health_check_events{chain_name=~\"$chain_name\", kubernetes_pod_name=~\"$kubernetes_pod_name\",role=~\"$role_type\",state=\"enqueued\"}) - sum by (kubernetes_pod_name, role)(aptos_network_pending_health_check_events{chain_name=~\"$chain_name\", kubernetes_pod_name=~\"$kubernetes_pod_name\",role=~\"$role_type\",state=\"dequeued\"})",
               "interval": "",
-              "legendFormat": "{{owner}}-{{role}}",
+              "legendFormat": "{{kubernetes_pod_name}}-{{role}}",
               "refId": "A"
             }
           ],
           "thresholds": [],
-          "timeFrom": null,
           "timeRegions": [],
-          "timeShift": null,
           "title": "Pending Health Check Events Queued",
           "tooltip": {
             "shared": true,
@@ -1263,9 +1526,7 @@
           },
           "type": "graph",
           "xaxis": {
-            "buckets": null,
             "mode": "time",
-            "name": null,
             "show": true,
             "values": []
           },
@@ -1274,22 +1535,16 @@
               "format": "none",
               "label": "",
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             },
             {
               "format": "short",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             }
           ],
           "yaxis": {
-            "align": false,
-            "alignLevel": null
+            "align": false
           }
         },
         {
@@ -1298,8 +1553,8 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": {
-            "uid": "${Datasource}",
-            "type": "prometheus"
+            "type": "prometheus",
+            "uid": "${Datasource}"
           },
           "description": "TBD",
           "fieldConfig": {
@@ -1347,16 +1602,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(aptos_network_pending_wire_messages{chain_name=~\"$chain_name\", owner=~\"$owner\",role=~\"$role_type\"}[$AggInterval])",
+              "expr": "rate(aptos_network_pending_wire_messages{chain_name=~\"$chain_name\", kubernetes_pod_name=~\"$kubernetes_pod_name\",role=~\"$role_type\"}[$AggInterval])",
               "interval": "",
-              "legendFormat": "{{owner}}-{{role}}",
+              "legendFormat": "{{kubernetes_pod_name}}-{{role}}",
               "refId": "B"
             }
           ],
           "thresholds": [],
-          "timeFrom": null,
           "timeRegions": [],
-          "timeShift": null,
           "title": "Pending Wire Messages",
           "tooltip": {
             "shared": true,
@@ -1365,9 +1618,7 @@
           },
           "type": "graph",
           "xaxis": {
-            "buckets": null,
             "mode": "time",
-            "name": null,
             "show": true,
             "values": []
           },
@@ -1376,22 +1627,16 @@
               "format": "none",
               "label": "",
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             },
             {
               "format": "short",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             }
           ],
           "yaxis": {
-            "align": false,
-            "alignLevel": null
+            "align": false
           }
         },
         {
@@ -1400,8 +1645,8 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": {
-            "uid": "${Datasource}",
-            "type": "prometheus"
+            "type": "prometheus",
+            "uid": "${Datasource}"
           },
           "description": "TBD",
           "fieldConfig": {
@@ -1449,16 +1694,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(aptos_network_pending_connectivity_manager_requests{chain_name=~\"$chain_name\", owner=~\"$owner\",role=~\"$role_type\"}[$AggInterval])",
+              "expr": "rate(aptos_network_pending_connectivity_manager_requests{chain_name=~\"$chain_name\", kubernetes_pod_name=~\"$kubernetes_pod_name\",role=~\"$role_type\"}[$AggInterval])",
               "interval": "",
-              "legendFormat": "{{owner}}-{{role}}",
+              "legendFormat": "{{kubernetes_pod_name}}-{{role}}",
               "refId": "B"
             }
           ],
           "thresholds": [],
-          "timeFrom": null,
           "timeRegions": [],
-          "timeShift": null,
           "title": "Pending Connectivity Manager Requests",
           "tooltip": {
             "shared": true,
@@ -1467,9 +1710,7 @@
           },
           "type": "graph",
           "xaxis": {
-            "buckets": null,
             "mode": "time",
-            "name": null,
             "show": true,
             "values": []
           },
@@ -1478,22 +1719,16 @@
               "format": "none",
               "label": "",
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             },
             {
               "format": "short",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             }
           ],
           "yaxis": {
-            "align": false,
-            "alignLevel": null
+            "align": false
           }
         }
       ],
@@ -1503,14 +1738,14 @@
     {
       "collapsed": true,
       "datasource": {
-        "uid": "${Datasource}",
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "${Datasource}"
       },
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 35
+        "y": 51
       },
       "id": 38,
       "panels": [
@@ -1520,8 +1755,8 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": {
-            "uid": "${Datasource}",
-            "type": "prometheus"
+            "type": "prometheus",
+            "uid": "${Datasource}"
           },
           "description": "RPCs declined or canceled due to hitting max RPC capacity or max queue capacity.",
           "fieldConfig": {
@@ -1568,18 +1803,16 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(aptos_network_rpc_messages{chain_name=~\"$chain_name\", network_id=~\"$network_id\", role_type=~\"$role_type\", owner=~\"$owner\", state=~\"(declined|canceled)\"}[$AggInterval])",
+              "expr": "rate(aptos_network_rpc_messages{chain_name=~\"$chain_name\", network_id=~\"$network_id\", role_type=~\"$role_type\", kubernetes_pod_name=~\"$kubernetes_pod_name\", state=~\"(declined|canceled)\"}[$AggInterval])",
               "format": "time_series",
               "interval": "",
               "intervalFactor": 1,
-              "legendFormat": "{{owner}}-{{role_type}}",
+              "legendFormat": "{{kubernetes_pod_name}}-{{role_type}}",
               "refId": "A"
             }
           ],
           "thresholds": [],
-          "timeFrom": null,
           "timeRegions": [],
-          "timeShift": null,
           "title": "RPC Messages Drop Rate",
           "tooltip": {
             "shared": true,
@@ -1588,33 +1821,24 @@
           },
           "type": "graph",
           "xaxis": {
-            "buckets": null,
             "mode": "time",
-            "name": null,
             "show": true,
             "values": []
           },
           "yaxes": [
             {
               "format": "short",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             },
             {
               "format": "short",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             }
           ],
           "yaxis": {
-            "align": false,
-            "alignLevel": null
+            "align": false
           }
         }
       ],
@@ -1624,14 +1848,14 @@
     {
       "collapsed": true,
       "datasource": {
-        "uid": "${Datasource}",
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "${Datasource}"
       },
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 36
+        "y": 52
       },
       "id": 87,
       "panels": [
@@ -1641,8 +1865,8 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": {
-            "uid": "${Datasource}",
-            "type": "prometheus"
+            "type": "prometheus",
+            "uid": "${Datasource}"
           },
           "description": "The rate of new inbound connections on the network interface",
           "fieldConfig": {
@@ -1690,16 +1914,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (owner, role_type, network_id) (rate(aptos_network_pending_connection_upgrades{chain_name=~\"$chain_name\", network_id=~\"$network_id\", role_type=~\"$role_type\", owner=~\"$owner\", direction=\"inbound\" }[$AggInterval]))",
+              "expr": "sum by (kubernetes_pod_name, role_type, network_id) (rate(aptos_network_pending_connection_upgrades{chain_name=~\"$chain_name\", network_id=~\"$network_id\", role_type=~\"$role_type\", kubernetes_pod_name=~\"$kubernetes_pod_name\", direction=\"inbound\" }[$AggInterval]))",
               "interval": "",
-              "legendFormat": "{{owner}}-{{role_type}}-{{network_id}}",
+              "legendFormat": "{{kubernetes_pod_name}}-{{role_type}}-{{network_id}}",
               "refId": "A"
             }
           ],
           "thresholds": [],
-          "timeFrom": null,
           "timeRegions": [],
-          "timeShift": null,
           "title": "Inbound Pending Connection Upgrades",
           "tooltip": {
             "shared": true,
@@ -1708,9 +1930,7 @@
           },
           "type": "graph",
           "xaxis": {
-            "buckets": null,
             "mode": "time",
-            "name": null,
             "show": true,
             "values": []
           },
@@ -1719,22 +1939,16 @@
               "format": "none",
               "label": "",
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             },
             {
               "format": "short",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             }
           ],
           "yaxis": {
-            "align": false,
-            "alignLevel": null
+            "align": false
           }
         },
         {
@@ -1743,8 +1957,8 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": {
-            "uid": "${Datasource}",
-            "type": "prometheus"
+            "type": "prometheus",
+            "uid": "${Datasource}"
           },
           "description": "The rate of new outbound connections on the network interface",
           "fieldConfig": {
@@ -1792,16 +2006,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (owner, role_type, network_id) (rate(aptos_network_pending_connection_upgrades{chain_name=~\"$chain_name\", network_id=~\"$network_id\", role_type=~\"$role_type\", owner=~\"$owner\", direction=\"outbound\" }[$AggInterval]))",
+              "expr": "sum by (kubernetes_pod_name, role_type, network_id) (rate(aptos_network_pending_connection_upgrades{chain_name=~\"$chain_name\", network_id=~\"$network_id\", role_type=~\"$role_type\", kubernetes_pod_name=~\"$kubernetes_pod_name\", direction=\"outbound\" }[$AggInterval]))",
               "interval": "",
-              "legendFormat": "{{owner}}-{{role_type}}-{{network_id}}",
+              "legendFormat": "{{kubernetes_pod_name}}-{{role_type}}-{{network_id}}",
               "refId": "A"
             }
           ],
           "thresholds": [],
-          "timeFrom": null,
           "timeRegions": [],
-          "timeShift": null,
           "title": "Outbound Pending Connection Upgrades",
           "tooltip": {
             "shared": true,
@@ -1810,9 +2022,7 @@
           },
           "type": "graph",
           "xaxis": {
-            "buckets": null,
             "mode": "time",
-            "name": null,
             "show": true,
             "values": []
           },
@@ -1821,22 +2031,16 @@
               "format": "none",
               "label": "",
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             },
             {
               "format": "short",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             }
           ],
           "yaxis": {
-            "align": false,
-            "alignLevel": null
+            "align": false
           }
         },
         {
@@ -1845,8 +2049,8 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": {
-            "uid": "${Datasource}",
-            "type": "prometheus"
+            "type": "prometheus",
+            "uid": "${Datasource}"
           },
           "description": "Latency of Inbound connection upgrades",
           "fieldConfig": {
@@ -1894,18 +2098,16 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.50, sum by (owner, role_type, network_id, le) (rate(aptos_network_connection_upgrade_time_seconds_bucket{chain_name=~\"$chain_name\", direction=\"inbound\",role_type=~\"$role_type\",owner=~\"$owner\",network_id=~\"$network_id\"}[$AggInterval])))",
+              "expr": "histogram_quantile(0.50, sum by (kubernetes_pod_name, role_type, network_id, le) (rate(aptos_network_connection_upgrade_time_seconds_bucket{chain_name=~\"$chain_name\", direction=\"inbound\",role_type=~\"$role_type\",kubernetes_pod_name=~\"$kubernetes_pod_name\",network_id=~\"$network_id\"}[$AggInterval])))",
               "hide": false,
               "instant": false,
               "interval": "",
-              "legendFormat": "{{owner}}-{{role_type}}-{{network_id}}",
+              "legendFormat": "{{kubernetes_pod_name}}-{{role_type}}-{{network_id}}",
               "refId": "C"
             }
           ],
           "thresholds": [],
-          "timeFrom": null,
           "timeRegions": [],
-          "timeShift": null,
           "title": "Inbound Connection Upgrade Latency [P50]",
           "tooltip": {
             "shared": true,
@@ -1914,9 +2116,7 @@
           },
           "type": "graph",
           "xaxis": {
-            "buckets": null,
             "mode": "time",
-            "name": null,
             "show": true,
             "values": []
           },
@@ -1925,22 +2125,16 @@
               "format": "s",
               "label": "",
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             },
             {
               "format": "short",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             }
           ],
           "yaxis": {
-            "align": false,
-            "alignLevel": null
+            "align": false
           }
         },
         {
@@ -1949,8 +2143,8 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": {
-            "uid": "${Datasource}",
-            "type": "prometheus"
+            "type": "prometheus",
+            "uid": "${Datasource}"
           },
           "description": "Latency of Outbound connection upgrades",
           "fieldConfig": {
@@ -1998,18 +2192,16 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.50, sum by (owner, role_type, network_id, le) (rate(aptos_network_connection_upgrade_time_seconds_bucket{chain_name=~\"$chain_name\", direction=\"outbound\",role_type=~\"$role_type\",owner=~\"$owner\",network_id=~\"$network_id\"}[$AggInterval])))",
+              "expr": "histogram_quantile(0.50, sum by (kubernetes_pod_name, role_type, network_id, le) (rate(aptos_network_connection_upgrade_time_seconds_bucket{chain_name=~\"$chain_name\", direction=\"outbound\",role_type=~\"$role_type\",kubernetes_pod_name=~\"$kubernetes_pod_name\",network_id=~\"$network_id\"}[$AggInterval])))",
               "hide": false,
               "instant": false,
               "interval": "",
-              "legendFormat": "{{owner}}-{{role_type}}-{{network_id}}",
+              "legendFormat": "{{kubernetes_pod_name}}-{{role_type}}-{{network_id}}",
               "refId": "C"
             }
           ],
           "thresholds": [],
-          "timeFrom": null,
           "timeRegions": [],
-          "timeShift": null,
           "title": "Outbound Connection Upgrade Latency [P50]",
           "tooltip": {
             "shared": true,
@@ -2018,9 +2210,7 @@
           },
           "type": "graph",
           "xaxis": {
-            "buckets": null,
             "mode": "time",
-            "name": null,
             "show": true,
             "values": []
           },
@@ -2029,22 +2219,16 @@
               "format": "s",
               "label": "",
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             },
             {
               "format": "short",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             }
           ],
           "yaxis": {
-            "align": false,
-            "alignLevel": null
+            "align": false
           }
         },
         {
@@ -2053,8 +2237,8 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": {
-            "uid": "${Datasource}",
-            "type": "prometheus"
+            "type": "prometheus",
+            "uid": "${Datasource}"
           },
           "description": "Latency of Inbound connection upgrades",
           "fieldConfig": {
@@ -2102,18 +2286,16 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.90, sum by (owner, role_type, network_id, le) (rate(aptos_network_connection_upgrade_time_seconds_bucket{chain_name=~\"$chain_name\", direction=\"inbound\",role_type=~\"$role_type\",owner=~\"$owner\",network_id=~\"$network_id\"}[$AggInterval])))",
+              "expr": "histogram_quantile(0.90, sum by (kubernetes_pod_name, role_type, network_id, le) (rate(aptos_network_connection_upgrade_time_seconds_bucket{chain_name=~\"$chain_name\", direction=\"inbound\",role_type=~\"$role_type\",kubernetes_pod_name=~\"$kubernetes_pod_name\",network_id=~\"$network_id\"}[$AggInterval])))",
               "hide": false,
               "instant": false,
               "interval": "",
-              "legendFormat": "{{owner}}-{{role_type}}-{{network_id}}",
+              "legendFormat": "{{kubernetes_pod_name}}-{{role_type}}-{{network_id}}",
               "refId": "C"
             }
           ],
           "thresholds": [],
-          "timeFrom": null,
           "timeRegions": [],
-          "timeShift": null,
           "title": "Inbound Connection Upgrade Latency [P90]",
           "tooltip": {
             "shared": true,
@@ -2122,9 +2304,7 @@
           },
           "type": "graph",
           "xaxis": {
-            "buckets": null,
             "mode": "time",
-            "name": null,
             "show": true,
             "values": []
           },
@@ -2133,22 +2313,16 @@
               "format": "s",
               "label": "",
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             },
             {
               "format": "short",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             }
           ],
           "yaxis": {
-            "align": false,
-            "alignLevel": null
+            "align": false
           }
         },
         {
@@ -2157,8 +2331,8 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": {
-            "uid": "${Datasource}",
-            "type": "prometheus"
+            "type": "prometheus",
+            "uid": "${Datasource}"
           },
           "description": "Latency of Outbound connection upgrades",
           "fieldConfig": {
@@ -2206,18 +2380,16 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.90, sum by (owner, role_type, network_id, le) (rate(aptos_network_connection_upgrade_time_seconds_bucket{chain_name=~\"$chain_name\", direction=\"outbound\",role_type=~\"$role_type\",owner=~\"$owner\",network_id=~\"$network_id\"}[$AggInterval])))",
+              "expr": "histogram_quantile(0.90, sum by (kubernetes_pod_name, role_type, network_id, le) (rate(aptos_network_connection_upgrade_time_seconds_bucket{chain_name=~\"$chain_name\", direction=\"outbound\",role_type=~\"$role_type\",kubernetes_pod_name=~\"$kubernetes_pod_name\",network_id=~\"$network_id\"}[$AggInterval])))",
               "hide": false,
               "instant": false,
               "interval": "",
-              "legendFormat": "{{owner}}-{{role_type}}-{{network_id}}",
+              "legendFormat": "{{kubernetes_pod_name}}-{{role_type}}-{{network_id}}",
               "refId": "C"
             }
           ],
           "thresholds": [],
-          "timeFrom": null,
           "timeRegions": [],
-          "timeShift": null,
           "title": "Outbound Connection Upgrade Latency [P90]",
           "tooltip": {
             "shared": true,
@@ -2226,9 +2398,7 @@
           },
           "type": "graph",
           "xaxis": {
-            "buckets": null,
             "mode": "time",
-            "name": null,
             "show": true,
             "values": []
           },
@@ -2237,22 +2407,16 @@
               "format": "s",
               "label": "",
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             },
             {
               "format": "short",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             }
           ],
           "yaxis": {
-            "align": false,
-            "alignLevel": null
+            "align": false
           }
         },
         {
@@ -2261,8 +2425,8 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": {
-            "uid": "${Datasource}",
-            "type": "prometheus"
+            "type": "prometheus",
+            "uid": "${Datasource}"
           },
           "description": "Latency of Inbound connection upgrades",
           "fieldConfig": {
@@ -2310,18 +2474,16 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.99, sum by (owner, role_type, network_id, le) (rate(aptos_network_connection_upgrade_time_seconds_bucket{chain_name=~\"$chain_name\", direction=\"inbound\",role_type=~\"$role_type\",owner=~\"$owner\",network_id=~\"$network_id\"}[$AggInterval])))",
+              "expr": "histogram_quantile(0.99, sum by (kubernetes_pod_name, role_type, network_id, le) (rate(aptos_network_connection_upgrade_time_seconds_bucket{chain_name=~\"$chain_name\", direction=\"inbound\",role_type=~\"$role_type\",kubernetes_pod_name=~\"$kubernetes_pod_name\",network_id=~\"$network_id\"}[$AggInterval])))",
               "hide": false,
               "instant": false,
               "interval": "",
-              "legendFormat": "{{owner}}-{{role_type}}-{{network_id}}",
+              "legendFormat": "{{kubernetes_pod_name}}-{{role_type}}-{{network_id}}",
               "refId": "C"
             }
           ],
           "thresholds": [],
-          "timeFrom": null,
           "timeRegions": [],
-          "timeShift": null,
           "title": "Inbound Connection Upgrade Latency [P99]",
           "tooltip": {
             "shared": true,
@@ -2330,9 +2492,7 @@
           },
           "type": "graph",
           "xaxis": {
-            "buckets": null,
             "mode": "time",
-            "name": null,
             "show": true,
             "values": []
           },
@@ -2341,22 +2501,16 @@
               "format": "s",
               "label": "",
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             },
             {
               "format": "short",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             }
           ],
           "yaxis": {
-            "align": false,
-            "alignLevel": null
+            "align": false
           }
         },
         {
@@ -2365,8 +2519,8 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": {
-            "uid": "${Datasource}",
-            "type": "prometheus"
+            "type": "prometheus",
+            "uid": "${Datasource}"
           },
           "description": "Latency of Outbound connection upgrades",
           "fieldConfig": {
@@ -2414,18 +2568,16 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.99, sum by (owner, role_type, network_id, le) (rate(aptos_network_connection_upgrade_time_seconds_bucket{chain_name=~\"$chain_name\", direction=\"outbound\",role_type=~\"$role_type\",owner=~\"$owner\",network_id=~\"$network_id\"}[$AggInterval])))",
+              "expr": "histogram_quantile(0.99, sum by (kubernetes_pod_name, role_type, network_id, le) (rate(aptos_network_connection_upgrade_time_seconds_bucket{chain_name=~\"$chain_name\", direction=\"outbound\",role_type=~\"$role_type\",kubernetes_pod_name=~\"$kubernetes_pod_name\",network_id=~\"$network_id\"}[$AggInterval])))",
               "hide": false,
               "instant": false,
               "interval": "",
-              "legendFormat": "{{owner}}-{{role_type}}-{{network_id}}",
+              "legendFormat": "{{kubernetes_pod_name}}-{{role_type}}-{{network_id}}",
               "refId": "C"
             }
           ],
           "thresholds": [],
-          "timeFrom": null,
           "timeRegions": [],
-          "timeShift": null,
           "title": "Outbound Connection Upgrade Latency [P99]",
           "tooltip": {
             "shared": true,
@@ -2434,9 +2586,7 @@
           },
           "type": "graph",
           "xaxis": {
-            "buckets": null,
             "mode": "time",
-            "name": null,
             "show": true,
             "values": []
           },
@@ -2445,22 +2595,16 @@
               "format": "s",
               "label": "",
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             },
             {
               "format": "short",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             }
           ],
           "yaxis": {
-            "align": false,
-            "alignLevel": null
+            "align": false
           }
         }
       ],
@@ -2470,14 +2614,14 @@
     {
       "collapsed": true,
       "datasource": {
-        "uid": "${Datasource}",
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "${Datasource}"
       },
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 37
+        "y": 53
       },
       "id": 69,
       "panels": [
@@ -2487,8 +2631,8 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": {
-            "uid": "${Datasource}",
-            "type": "prometheus"
+            "type": "prometheus",
+            "uid": "${Datasource}"
           },
           "description": "",
           "fieldConfig": {
@@ -2535,19 +2679,17 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by(network_id, role_type, owner) (rate(aptos_network_rpc_messages{chain_name=~\"$chain_name\", network_id=~\"$network_id\",role_type=~\"$role_type\",owner=~\"$owner\",type=\"request\",state=\"failed\"}[$AggInterval])) / sum by(network_id, role_type, owner) (rate(aptos_network_rpc_messages{chain_name=~\"$chain_name\", network_id=~\"$network_id\",role_type=~\"$role_type\",owner=~\"$owner\",type=\"request\",state=~\"(sent|failed)\"}[$AggInterval]))",
+              "expr": "sum by(network_id, role_type, kubernetes_pod_name) (rate(aptos_network_rpc_messages{chain_name=~\"$chain_name\", network_id=~\"$network_id\",role_type=~\"$role_type\",kubernetes_pod_name=~\"$kubernetes_pod_name\",type=\"request\",state=\"failed\"}[$AggInterval])) / sum by(network_id, role_type, kubernetes_pod_name) (rate(aptos_network_rpc_messages{chain_name=~\"$chain_name\", network_id=~\"$network_id\",role_type=~\"$role_type\",kubernetes_pod_name=~\"$kubernetes_pod_name\",type=\"request\",state=~\"(sent|failed)\"}[$AggInterval]))",
               "format": "time_series",
               "hide": false,
               "interval": "",
               "intervalFactor": 1,
-              "legendFormat": "{{owner}}-{{role_type}}-{{network_id}}",
+              "legendFormat": "{{kubernetes_pod_name}}-{{role_type}}-{{network_id}}",
               "refId": "D"
             }
           ],
           "thresholds": [],
-          "timeFrom": null,
           "timeRegions": [],
-          "timeShift": null,
           "title": "RPC Total Request Error Rate (% requests in error)",
           "tooltip": {
             "shared": true,
@@ -2556,33 +2698,24 @@
           },
           "type": "graph",
           "xaxis": {
-            "buckets": null,
             "mode": "time",
-            "name": null,
             "show": true,
             "values": []
           },
           "yaxes": [
             {
               "format": "percentunit",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             },
             {
               "format": "short",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             }
           ],
           "yaxis": {
-            "align": false,
-            "alignLevel": null
+            "align": false
           }
         },
         {
@@ -2591,8 +2724,8 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": {
-            "uid": "${Datasource}",
-            "type": "prometheus"
+            "type": "prometheus",
+            "uid": "${Datasource}"
           },
           "description": "",
           "fieldConfig": {
@@ -2639,19 +2772,17 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by(network_id, role_type, owner) (rate(aptos_network_rpc_messages{chain_name=~\"$chain_name\", network_id=~\"$network_id\",role_type=~\"$role_type\",owner=~\"$owner\",type=\"response\",state=\"failed\"}[$AggInterval])) / sum by(network_id, role_type, owner) (rate(aptos_network_rpc_messages{chain_name=~\"$chain_name\", network_id=~\"$network_id\",role_type=~\"$role_type\",owner=~\"$owner\",type=\"request\",state=\"received\"}[$AggInterval]))",
+              "expr": "sum by(network_id, role_type, kubernetes_pod_name) (rate(aptos_network_rpc_messages{chain_name=~\"$chain_name\", network_id=~\"$network_id\",role_type=~\"$role_type\",kubernetes_pod_name=~\"$kubernetes_pod_name\",type=\"response\",state=\"failed\"}[$AggInterval])) / sum by(network_id, role_type, kubernetes_pod_name) (rate(aptos_network_rpc_messages{chain_name=~\"$chain_name\", network_id=~\"$network_id\",role_type=~\"$role_type\",kubernetes_pod_name=~\"$kubernetes_pod_name\",type=\"request\",state=\"received\"}[$AggInterval]))",
               "format": "time_series",
               "hide": false,
               "interval": "",
               "intervalFactor": 1,
-              "legendFormat": "{{owner}}-{{role_type}}-{{network_id}}",
+              "legendFormat": "{{kubernetes_pod_name}}-{{role_type}}-{{network_id}}",
               "refId": "A"
             }
           ],
           "thresholds": [],
-          "timeFrom": null,
           "timeRegions": [],
-          "timeShift": null,
           "title": "RPC Total Response Error Rate (% responses in error)",
           "tooltip": {
             "shared": true,
@@ -2660,33 +2791,24 @@
           },
           "type": "graph",
           "xaxis": {
-            "buckets": null,
             "mode": "time",
-            "name": null,
             "show": true,
             "values": []
           },
           "yaxes": [
             {
               "format": "percentunit",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             },
             {
               "format": "short",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             }
           ],
           "yaxis": {
-            "align": false,
-            "alignLevel": null
+            "align": false
           }
         },
         {
@@ -2695,8 +2817,8 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": {
-            "uid": "${Datasource}",
-            "type": "prometheus"
+            "type": "prometheus",
+            "uid": "${Datasource}"
           },
           "description": "Total throughput of all Outbound RPC requests per peer",
           "fieldConfig": {
@@ -2743,18 +2865,16 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (owner, role_type, network_id) (rate(aptos_network_rpc_bytes{chain_name=~\"$chain_name\", network_id=~\"$network_id\", role_type=~\"$role_type\", owner=~\"$owner\", state=\"sent\"}[$AggInterval]))",
+              "expr": "sum by (kubernetes_pod_name, role_type, network_id) (rate(aptos_network_rpc_bytes{chain_name=~\"$chain_name\", network_id=~\"$network_id\", role_type=~\"$role_type\", kubernetes_pod_name=~\"$kubernetes_pod_name\", state=\"sent\"}[$AggInterval]))",
               "format": "time_series",
               "interval": "",
               "intervalFactor": 1,
-              "legendFormat": "{{owner}}-{{role_type}}-{{network_id}}",
+              "legendFormat": "{{kubernetes_pod_name}}-{{role_type}}-{{network_id}}",
               "refId": "A"
             }
           ],
           "thresholds": [],
-          "timeFrom": null,
           "timeRegions": [],
-          "timeShift": null,
           "title": "Throughput of Total Outbound RPCs (bytes/s)",
           "tooltip": {
             "shared": true,
@@ -2763,9 +2883,7 @@
           },
           "type": "graph",
           "xaxis": {
-            "buckets": null,
             "mode": "time",
-            "name": null,
             "show": true,
             "values": []
           },
@@ -2774,22 +2892,16 @@
               "format": "Bps",
               "label": "bytes/s",
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             },
             {
               "format": "short",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             }
           ],
           "yaxis": {
-            "align": false,
-            "alignLevel": null
+            "align": false
           }
         },
         {
@@ -2798,8 +2910,8 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": {
-            "uid": "${Datasource}",
-            "type": "prometheus"
+            "type": "prometheus",
+            "uid": "${Datasource}"
           },
           "description": "Total throughput of all Inbound RPC requests per peer",
           "fieldConfig": {
@@ -2846,18 +2958,16 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (owner, role_type, network_id)(rate(aptos_network_rpc_bytes{chain_name=~\"$chain_name\", network_id=~\"$network_id\", role_type=~\"$role_type\", owner=~\"$owner\", state=\"received\"}[$AggInterval]))",
+              "expr": "sum by (kubernetes_pod_name, role_type, network_id)(rate(aptos_network_rpc_bytes{chain_name=~\"$chain_name\", network_id=~\"$network_id\", role_type=~\"$role_type\", kubernetes_pod_name=~\"$kubernetes_pod_name\", state=\"received\"}[$AggInterval]))",
               "format": "time_series",
               "interval": "",
               "intervalFactor": 1,
-              "legendFormat": "{{owner}}-{{role_type}}-{{network_id}}",
+              "legendFormat": "{{kubernetes_pod_name}}-{{role_type}}-{{network_id}}",
               "refId": "A"
             }
           ],
           "thresholds": [],
-          "timeFrom": null,
           "timeRegions": [],
-          "timeShift": null,
           "title": "Throughput of Total Inbound RPCs (bytes/s)",
           "tooltip": {
             "shared": true,
@@ -2866,9 +2976,7 @@
           },
           "type": "graph",
           "xaxis": {
-            "buckets": null,
             "mode": "time",
-            "name": null,
             "show": true,
             "values": []
           },
@@ -2877,22 +2985,16 @@
               "format": "Bps",
               "label": "bytes/s",
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             },
             {
               "format": "short",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             }
           ],
           "yaxis": {
-            "align": false,
-            "alignLevel": null
+            "align": false
           }
         },
         {
@@ -2901,8 +3003,8 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": {
-            "uid": "${Datasource}",
-            "type": "prometheus"
+            "type": "prometheus",
+            "uid": "${Datasource}"
           },
           "description": "Total number of all Outbound RPC requests per peer",
           "fieldConfig": {
@@ -2950,18 +3052,16 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (owner, role_type, network_id)(rate(aptos_network_rpc_messages{chain_name=~\"$chain_name\", network_id=~\"$network_id\", role_type=~\"$role_type\", owner=~\"$owner\", type=\"request\",state=\"sent\"}[$AggInterval]))",
+              "expr": "sum by (kubernetes_pod_name, role_type, network_id)(rate(aptos_network_rpc_messages{chain_name=~\"$chain_name\", network_id=~\"$network_id\", role_type=~\"$role_type\", kubernetes_pod_name=~\"$kubernetes_pod_name\", type=\"request\",state=\"sent\"}[$AggInterval]))",
               "format": "time_series",
               "interval": "",
               "intervalFactor": 1,
-              "legendFormat": "{{owner}}-{{role_type}}-{{network_id}}",
+              "legendFormat": "{{kubernetes_pod_name}}-{{role_type}}-{{network_id}}",
               "refId": "A"
             }
           ],
           "thresholds": [],
-          "timeFrom": null,
           "timeRegions": [],
-          "timeShift": null,
           "title": "Rate of Total Outbound RPCs (msg/s)",
           "tooltip": {
             "shared": true,
@@ -2970,9 +3070,7 @@
           },
           "type": "graph",
           "xaxis": {
-            "buckets": null,
             "mode": "time",
-            "name": null,
             "show": true,
             "values": []
           },
@@ -2981,22 +3079,16 @@
               "format": "short",
               "label": "msg/s",
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             },
             {
               "format": "short",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             }
           ],
           "yaxis": {
-            "align": false,
-            "alignLevel": null
+            "align": false
           }
         },
         {
@@ -3005,8 +3097,8 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": {
-            "uid": "${Datasource}",
-            "type": "prometheus"
+            "type": "prometheus",
+            "uid": "${Datasource}"
           },
           "description": "Total number of all Inbound RPC requests per peer",
           "fieldConfig": {
@@ -3053,18 +3145,16 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (owner, role_type, network_id)(rate(aptos_network_rpc_messages{chain_name=~\"$chain_name\", network_id=~\"$network_id\", role_type=~\"$role_type\", owner=~\"$owner\", type=\"request\", state=\"received\"}[$AggInterval]))",
+              "expr": "sum by (kubernetes_pod_name, role_type, network_id)(rate(aptos_network_rpc_messages{chain_name=~\"$chain_name\", network_id=~\"$network_id\", role_type=~\"$role_type\", kubernetes_pod_name=~\"$kubernetes_pod_name\", type=\"request\", state=\"received\"}[$AggInterval]))",
               "format": "time_series",
               "interval": "",
               "intervalFactor": 1,
-              "legendFormat": "{{owner}}-{{role_type}}-{{network_id}}",
+              "legendFormat": "{{kubernetes_pod_name}}-{{role_type}}-{{network_id}}",
               "refId": "A"
             }
           ],
           "thresholds": [],
-          "timeFrom": null,
           "timeRegions": [],
-          "timeShift": null,
           "title": "Rate of Total Inbound RPCs (msg/s)",
           "tooltip": {
             "shared": true,
@@ -3073,9 +3163,7 @@
           },
           "type": "graph",
           "xaxis": {
-            "buckets": null,
             "mode": "time",
-            "name": null,
             "show": true,
             "values": []
           },
@@ -3084,22 +3172,16 @@
               "format": "short",
               "label": "msg/s",
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             },
             {
               "format": "short",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             }
           ],
           "yaxis": {
-            "align": false,
-            "alignLevel": null
+            "align": false
           }
         },
         {
@@ -3108,8 +3190,8 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": {
-            "uid": "${Datasource}",
-            "type": "prometheus"
+            "type": "prometheus",
+            "uid": "${Datasource}"
           },
           "description": "",
           "fieldConfig": {
@@ -3157,18 +3239,16 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.50, sum by (owner, network_id, role_type, le)(rate(aptos_network_outbound_rpc_request_latency_seconds_bucket{chain_name=~\"$chain_name\", protocol_id=~\"$rpc_protocol\",owner=~\"$owner\",network_id=~\"$network_id\",role_type=~\"$role_type\"}[$AggInterval])))",
+              "expr": "histogram_quantile(0.50, sum by (kubernetes_pod_name, network_id, role_type, le)(rate(aptos_network_outbound_rpc_request_latency_seconds_bucket{chain_name=~\"$chain_name\", protocol_id=~\"$rpc_protocol\",kubernetes_pod_name=~\"$kubernetes_pod_name\",network_id=~\"$network_id\",role_type=~\"$role_type\"}[$AggInterval])))",
               "hide": false,
               "instant": false,
               "interval": "",
-              "legendFormat": "{{owner}}-{{role_type}}-{{network_id}}",
+              "legendFormat": "{{kubernetes_pod_name}}-{{role_type}}-{{network_id}}",
               "refId": "A"
             }
           ],
           "thresholds": [],
-          "timeFrom": null,
           "timeRegions": [],
-          "timeShift": null,
           "title": "Latency of $rpc_protocol Outbound RPCs [P50]",
           "tooltip": {
             "shared": true,
@@ -3177,9 +3257,7 @@
           },
           "type": "graph",
           "xaxis": {
-            "buckets": null,
             "mode": "time",
-            "name": null,
             "show": true,
             "values": []
           },
@@ -3188,22 +3266,16 @@
               "format": "s",
               "label": "",
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             },
             {
               "format": "short",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             }
           ],
           "yaxis": {
-            "align": false,
-            "alignLevel": null
+            "align": false
           }
         },
         {
@@ -3212,8 +3284,8 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": {
-            "uid": "${Datasource}",
-            "type": "prometheus"
+            "type": "prometheus",
+            "uid": "${Datasource}"
           },
           "description": "",
           "fieldConfig": {
@@ -3261,18 +3333,16 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.50, sum by (owner, network_id, role_type, le)(rate(aptos_network_inbound_rpc_handler_latency_seconds_bucket{chain_name=~\"$chain_name\", protocol_id=~\"$rpc_protocol\",owner=~\"$owner\",network_id=~\"$network_id\",role_type=~\"$role_type\"}[$AggInterval])))",
+              "expr": "histogram_quantile(0.50, sum by (kubernetes_pod_name, network_id, role_type, le)(rate(aptos_network_inbound_rpc_handler_latency_seconds_bucket{chain_name=~\"$chain_name\", protocol_id=~\"$rpc_protocol\",kubernetes_pod_name=~\"$kubernetes_pod_name\",network_id=~\"$network_id\",role_type=~\"$role_type\"}[$AggInterval])))",
               "hide": false,
               "instant": false,
               "interval": "",
-              "legendFormat": "{{owner}}-{{role_type}}-{{network_id}}",
+              "legendFormat": "{{kubernetes_pod_name}}-{{role_type}}-{{network_id}}",
               "refId": "A"
             }
           ],
           "thresholds": [],
-          "timeFrom": null,
           "timeRegions": [],
-          "timeShift": null,
           "title": "Latency of $rpc_protocol Inbound RPCs [P50]",
           "tooltip": {
             "shared": true,
@@ -3281,9 +3351,7 @@
           },
           "type": "graph",
           "xaxis": {
-            "buckets": null,
             "mode": "time",
-            "name": null,
             "show": true,
             "values": []
           },
@@ -3292,22 +3360,16 @@
               "format": "s",
               "label": "",
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             },
             {
               "format": "short",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             }
           ],
           "yaxis": {
-            "align": false,
-            "alignLevel": null
+            "align": false
           }
         },
         {
@@ -3316,8 +3378,8 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": {
-            "uid": "${Datasource}",
-            "type": "prometheus"
+            "type": "prometheus",
+            "uid": "${Datasource}"
           },
           "description": "",
           "fieldConfig": {
@@ -3365,18 +3427,16 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.90, sum by (owner, network_id, role_type, le)(rate(aptos_network_outbound_rpc_request_latency_seconds_bucket{chain_name=~\"$chain_name\", protocol_id=~\"$rpc_protocol\",owner=~\"$owner\",network_id=~\"$network_id\",role_type=~\"$role_type\"}[$AggInterval])))",
+              "expr": "histogram_quantile(0.90, sum by (kubernetes_pod_name, network_id, role_type, le)(rate(aptos_network_outbound_rpc_request_latency_seconds_bucket{chain_name=~\"$chain_name\", protocol_id=~\"$rpc_protocol\",kubernetes_pod_name=~\"$kubernetes_pod_name\",network_id=~\"$network_id\",role_type=~\"$role_type\"}[$AggInterval])))",
               "hide": false,
               "instant": false,
               "interval": "",
-              "legendFormat": "{{owner}}-{{role_type}}-{{network_id}}",
+              "legendFormat": "{{kubernetes_pod_name}}-{{role_type}}-{{network_id}}",
               "refId": "A"
             }
           ],
           "thresholds": [],
-          "timeFrom": null,
           "timeRegions": [],
-          "timeShift": null,
           "title": "Latency of $rpc_protocol Outbound RPCs [P90]",
           "tooltip": {
             "shared": true,
@@ -3385,9 +3445,7 @@
           },
           "type": "graph",
           "xaxis": {
-            "buckets": null,
             "mode": "time",
-            "name": null,
             "show": true,
             "values": []
           },
@@ -3396,22 +3454,16 @@
               "format": "s",
               "label": "",
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             },
             {
               "format": "short",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             }
           ],
           "yaxis": {
-            "align": false,
-            "alignLevel": null
+            "align": false
           }
         },
         {
@@ -3420,8 +3472,8 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": {
-            "uid": "${Datasource}",
-            "type": "prometheus"
+            "type": "prometheus",
+            "uid": "${Datasource}"
           },
           "description": "",
           "fieldConfig": {
@@ -3469,18 +3521,16 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.90, sum by (owner, network_id, role_type, le)(rate(aptos_network_inbound_rpc_handler_latency_seconds_bucket{chain_name=~\"$chain_name\", protocol_id=~\"$rpc_protocol\",owner=~\"$owner\",network_id=~\"$network_id\",role_type=~\"$role_type\"}[$AggInterval])))",
+              "expr": "histogram_quantile(0.90, sum by (kubernetes_pod_name, network_id, role_type, le)(rate(aptos_network_inbound_rpc_handler_latency_seconds_bucket{chain_name=~\"$chain_name\", protocol_id=~\"$rpc_protocol\",kubernetes_pod_name=~\"$kubernetes_pod_name\",network_id=~\"$network_id\",role_type=~\"$role_type\"}[$AggInterval])))",
               "hide": false,
               "instant": false,
               "interval": "",
-              "legendFormat": "{{owner}}-{{role_type}}-{{network_id}}",
+              "legendFormat": "{{kubernetes_pod_name}}-{{role_type}}-{{network_id}}",
               "refId": "A"
             }
           ],
           "thresholds": [],
-          "timeFrom": null,
           "timeRegions": [],
-          "timeShift": null,
           "title": "Latency of $rpc_protocol Inbound RPCs [P90]",
           "tooltip": {
             "shared": true,
@@ -3489,9 +3539,7 @@
           },
           "type": "graph",
           "xaxis": {
-            "buckets": null,
             "mode": "time",
-            "name": null,
             "show": true,
             "values": []
           },
@@ -3500,22 +3548,16 @@
               "format": "s",
               "label": "",
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             },
             {
               "format": "short",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             }
           ],
           "yaxis": {
-            "align": false,
-            "alignLevel": null
+            "align": false
           }
         },
         {
@@ -3524,8 +3566,8 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": {
-            "uid": "${Datasource}",
-            "type": "prometheus"
+            "type": "prometheus",
+            "uid": "${Datasource}"
           },
           "description": "",
           "fieldConfig": {
@@ -3573,18 +3615,16 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.99, sum by (owner, network_id, role_type, le)(rate(aptos_network_outbound_rpc_request_latency_seconds_bucket{chain_name=~\"$chain_name\", protocol_id=~\"$rpc_protocol\",owner=~\"$owner\",network_id=~\"$network_id\",role_type=~\"$role_type\"}[$AggInterval])))",
+              "expr": "histogram_quantile(0.99, sum by (kubernetes_pod_name, network_id, role_type, le)(rate(aptos_network_outbound_rpc_request_latency_seconds_bucket{chain_name=~\"$chain_name\", protocol_id=~\"$rpc_protocol\",kubernetes_pod_name=~\"$kubernetes_pod_name\",network_id=~\"$network_id\",role_type=~\"$role_type\"}[$AggInterval])))",
               "hide": false,
               "instant": false,
               "interval": "",
-              "legendFormat": "{{owner}}-{{role_type}}-{{network_id}}",
+              "legendFormat": "{{kubernetes_pod_name}}-{{role_type}}-{{network_id}}",
               "refId": "A"
             }
           ],
           "thresholds": [],
-          "timeFrom": null,
           "timeRegions": [],
-          "timeShift": null,
           "title": "Latency of $rpc_protocol Outbound RPCs [P99]",
           "tooltip": {
             "shared": true,
@@ -3593,9 +3633,7 @@
           },
           "type": "graph",
           "xaxis": {
-            "buckets": null,
             "mode": "time",
-            "name": null,
             "show": true,
             "values": []
           },
@@ -3604,22 +3642,16 @@
               "format": "s",
               "label": "",
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             },
             {
               "format": "short",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             }
           ],
           "yaxis": {
-            "align": false,
-            "alignLevel": null
+            "align": false
           }
         },
         {
@@ -3628,8 +3660,8 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": {
-            "uid": "${Datasource}",
-            "type": "prometheus"
+            "type": "prometheus",
+            "uid": "${Datasource}"
           },
           "description": "",
           "fieldConfig": {
@@ -3677,18 +3709,16 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "histogram_quantile(0.99, sum by (owner, network_id, role_type, le)(rate(aptos_network_inbound_rpc_handler_latency_seconds_bucket{chain_name=~\"$chain_name\", protocol_id=~\"$rpc_protocol\",owner=~\"$owner\",network_id=~\"$network_id\",role_type=~\"$role_type\"}[$AggInterval])))",
+              "expr": "histogram_quantile(0.99, sum by (kubernetes_pod_name, network_id, role_type, le)(rate(aptos_network_inbound_rpc_handler_latency_seconds_bucket{chain_name=~\"$chain_name\", protocol_id=~\"$rpc_protocol\",kubernetes_pod_name=~\"$kubernetes_pod_name\",network_id=~\"$network_id\",role_type=~\"$role_type\"}[$AggInterval])))",
               "hide": false,
               "instant": false,
               "interval": "",
-              "legendFormat": "{{owner}}-{{role_type}}-{{network_id}}",
+              "legendFormat": "{{kubernetes_pod_name}}-{{role_type}}-{{network_id}}",
               "refId": "A"
             }
           ],
           "thresholds": [],
-          "timeFrom": null,
           "timeRegions": [],
-          "timeShift": null,
           "title": "Latency of $rpc_protocol Inbound RPCs [P99]",
           "tooltip": {
             "shared": true,
@@ -3697,9 +3727,7 @@
           },
           "type": "graph",
           "xaxis": {
-            "buckets": null,
             "mode": "time",
-            "name": null,
             "show": true,
             "values": []
           },
@@ -3708,22 +3736,16 @@
               "format": "s",
               "label": "",
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             },
             {
               "format": "short",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             }
           ],
           "yaxis": {
-            "align": false,
-            "alignLevel": null
+            "align": false
           }
         }
       ],
@@ -3733,14 +3755,14 @@
     {
       "collapsed": true,
       "datasource": {
-        "uid": "${Datasource}",
-        "type": "prometheus"
+        "type": "prometheus",
+        "uid": "${Datasource}"
       },
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 38
+        "y": 54
       },
       "id": 67,
       "panels": [
@@ -3750,8 +3772,8 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": {
-            "uid": "${Datasource}",
-            "type": "prometheus"
+            "type": "prometheus",
+            "uid": "${Datasource}"
           },
           "description": "Total throughput of all Outbound Direct Send requests per peer",
           "fieldConfig": {
@@ -3798,18 +3820,16 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (owner, role_type, network_id)(rate(aptos_network_direct_send_bytes{chain_name=~\"$chain_name\", network_id=~\"$network_id\", role_type=~\"$role_type\", owner=~\"$owner\", state=\"sent\"}[$AggInterval]))",
+              "expr": "sum by (kubernetes_pod_name, role_type, network_id)(rate(aptos_network_direct_send_bytes{chain_name=~\"$chain_name\", network_id=~\"$network_id\", role_type=~\"$role_type\", kubernetes_pod_name=~\"$kubernetes_pod_name\", state=\"sent\"}[$AggInterval]))",
               "format": "time_series",
               "interval": "",
               "intervalFactor": 1,
-              "legendFormat": "{{owner}}-{{role_type}}-{{network_id}}",
+              "legendFormat": "{{kubernetes_pod_name}}-{{role_type}}-{{network_id}}",
               "refId": "A"
             }
           ],
           "thresholds": [],
-          "timeFrom": null,
           "timeRegions": [],
-          "timeShift": null,
           "title": "Throughput of Total Outbound Direct Sends (bytes/s)",
           "tooltip": {
             "shared": true,
@@ -3818,9 +3838,7 @@
           },
           "type": "graph",
           "xaxis": {
-            "buckets": null,
             "mode": "time",
-            "name": null,
             "show": true,
             "values": []
           },
@@ -3829,22 +3847,16 @@
               "format": "Bps",
               "label": "bytes/s",
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             },
             {
               "format": "short",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             }
           ],
           "yaxis": {
-            "align": false,
-            "alignLevel": null
+            "align": false
           }
         },
         {
@@ -3853,8 +3865,8 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": {
-            "uid": "${Datasource}",
-            "type": "prometheus"
+            "type": "prometheus",
+            "uid": "${Datasource}"
           },
           "description": "Total throughput of all Inbound Direct Send requests per peer",
           "fieldConfig": {
@@ -3901,18 +3913,16 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (owner, role_type, network_id)(rate(aptos_network_direct_send_bytes{chain_name=~\"$chain_name\", network_id=~\"$network_id\", role_type=~\"$role_type\", owner=~\"$owner\", state=\"received\"}[$AggInterval]))",
+              "expr": "sum by (kubernetes_pod_name, role_type, network_id)(rate(aptos_network_direct_send_bytes{chain_name=~\"$chain_name\", network_id=~\"$network_id\", role_type=~\"$role_type\", kubernetes_pod_name=~\"$kubernetes_pod_name\", state=\"received\"}[$AggInterval]))",
               "format": "time_series",
               "interval": "",
               "intervalFactor": 1,
-              "legendFormat": "{{owner}}-{{role_type}}-{{network_id}}",
+              "legendFormat": "{{kubernetes_pod_name}}-{{role_type}}-{{network_id}}",
               "refId": "A"
             }
           ],
           "thresholds": [],
-          "timeFrom": null,
           "timeRegions": [],
-          "timeShift": null,
           "title": "Throughput of Total Inbound Direct Sends (bytes/s)",
           "tooltip": {
             "shared": true,
@@ -3921,9 +3931,7 @@
           },
           "type": "graph",
           "xaxis": {
-            "buckets": null,
             "mode": "time",
-            "name": null,
             "show": true,
             "values": []
           },
@@ -3932,22 +3940,16 @@
               "format": "Bps",
               "label": "bytes/s",
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             },
             {
               "format": "short",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             }
           ],
           "yaxis": {
-            "align": false,
-            "alignLevel": null
+            "align": false
           }
         },
         {
@@ -3956,8 +3958,8 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": {
-            "uid": "${Datasource}",
-            "type": "prometheus"
+            "type": "prometheus",
+            "uid": "${Datasource}"
           },
           "description": "Total number of all Outbound Direct Send requests per peer",
           "fieldConfig": {
@@ -4003,16 +4005,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (owner, role_type, network_id)(rate(aptos_network_direct_send_messages{chain_name=~\"$chain_name\", network_id=~\"$network_id\", role_type=~\"$role_type\", owner=~\"$owner\", state=\"sent\"}[$AggInterval]))",
+              "expr": "sum by (kubernetes_pod_name, role_type, network_id)(rate(aptos_network_direct_send_messages{chain_name=~\"$chain_name\", network_id=~\"$network_id\", role_type=~\"$role_type\", kubernetes_pod_name=~\"$kubernetes_pod_name\", state=\"sent\"}[$AggInterval]))",
               "interval": "",
-              "legendFormat": "{{owner}}-{{role_type}}-{{network_id}}",
+              "legendFormat": "{{kubernetes_pod_name}}-{{role_type}}-{{network_id}}",
               "refId": "A"
             }
           ],
           "thresholds": [],
-          "timeFrom": null,
           "timeRegions": [],
-          "timeShift": null,
           "title": "Rate of Total Outbound Direct Sends (msg/s)",
           "tooltip": {
             "shared": true,
@@ -4021,9 +4021,7 @@
           },
           "type": "graph",
           "xaxis": {
-            "buckets": null,
             "mode": "time",
-            "name": null,
             "show": true,
             "values": []
           },
@@ -4032,22 +4030,16 @@
               "format": "short",
               "label": "msg/s",
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             },
             {
               "format": "short",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             }
           ],
           "yaxis": {
-            "align": false,
-            "alignLevel": null
+            "align": false
           }
         },
         {
@@ -4056,8 +4048,8 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": {
-            "uid": "${Datasource}",
-            "type": "prometheus"
+            "type": "prometheus",
+            "uid": "${Datasource}"
           },
           "description": "Total number of all Inbound Direct Send requests per peer",
           "fieldConfig": {
@@ -4103,16 +4095,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (owner, role_type, network_id)(rate(aptos_network_direct_send_messages{chain_name=~\"$chain_name\", network_id=~\"$network_id\", role_type=~\"$role_type\", owner=~\"$owner\", state=\"received\"}[$AggInterval]))",
+              "expr": "sum by (kubernetes_pod_name, role_type, network_id)(rate(aptos_network_direct_send_messages{chain_name=~\"$chain_name\", network_id=~\"$network_id\", role_type=~\"$role_type\", kubernetes_pod_name=~\"$kubernetes_pod_name\", state=\"received\"}[$AggInterval]))",
               "interval": "",
-              "legendFormat": "{{owner}}-{{role_type}}-{{network_id}}",
+              "legendFormat": "{{kubernetes_pod_name}}-{{role_type}}-{{network_id}}",
               "refId": "A"
             }
           ],
           "thresholds": [],
-          "timeFrom": null,
           "timeRegions": [],
-          "timeShift": null,
           "title": "Rate of Total Inbound Direct Sends (msg/s)",
           "tooltip": {
             "shared": true,
@@ -4121,9 +4111,7 @@
           },
           "type": "graph",
           "xaxis": {
-            "buckets": null,
             "mode": "time",
-            "name": null,
             "show": true,
             "values": []
           },
@@ -4132,22 +4120,16 @@
               "format": "short",
               "label": "msg/s",
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             },
             {
               "format": "short",
-              "label": null,
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             }
           ],
           "yaxis": {
-            "align": false,
-            "alignLevel": null
+            "align": false
           }
         }
       ],
@@ -4156,12 +4138,17 @@
     }
   ],
   "refresh": false,
-  "schemaVersion": 26,
+  "schemaVersion": 35,
   "style": "dark",
   "tags": [],
   "templating": {
     "list": [
       {
+        "current": {
+          "selected": false,
+          "text": "Prometheus",
+          "value": "Prometheus"
+        },
         "hide": 0,
         "includeAll": false,
         "multi": false,
@@ -4177,12 +4164,8 @@
       {
         "current": {
           "selected": true,
-          "text": [
-            "All"
-          ],
-          "value": [
-            "$__all"
-          ]
+          "text": "aptos-devnet",
+          "value": "aptos-devnet"
         },
         "datasource": {
           "type": "prometheus",
@@ -4213,69 +4196,69 @@
         "current": {
           "selected": true,
           "text": [
-            "Validator"
+            "Public"
           ],
           "value": [
-            "Validator"
+            "Public"
           ]
         },
         "datasource": {
-          "uid": "${Datasource}",
-          "type": "prometheus"
+          "type": "prometheus",
+          "uid": "${Datasource}"
         },
         "definition": "label_values(network_id)",
         "hide": 0,
         "includeAll": true,
-        "label": null,
         "multi": true,
         "name": "network_id",
         "options": [],
-        "query": "label_values(network_id)",
+        "query": {
+          "query": "label_values(network_id)",
+          "refId": "Prometheus-network_id-Variable-Query"
+        },
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
         "sort": 0,
         "tagValuesQuery": "",
-        "tags": [],
         "tagsQuery": "",
         "type": "query",
         "useTags": false
       },
       {
-        "allValue": null,
         "current": {
           "selected": true,
           "text": [
-            "validator"
+            "full_node"
           ],
           "value": [
-            "validator"
+            "full_node"
           ]
         },
         "datasource": {
-          "uid": "${Datasource}",
-          "type": "prometheus"
+          "type": "prometheus",
+          "uid": "${Datasource}"
         },
         "definition": "label_values(role_type)",
         "hide": 0,
         "includeAll": true,
-        "label": null,
         "multi": true,
         "name": "role_type",
         "options": [],
-        "query": "label_values(role_type)",
+        "query": {
+          "query": "label_values(role_type)",
+          "refId": "Prometheus-role_type-Variable-Query"
+        },
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
         "sort": 0,
         "tagValuesQuery": "",
-        "tags": [],
         "tagsQuery": "",
         "type": "query",
         "useTags": false
       },
       {
-        "allValue": null,
         "current": {
           "selected": true,
           "text": [
@@ -4286,29 +4269,29 @@
           ]
         },
         "datasource": {
-          "uid": "${Datasource}",
-          "type": "prometheus"
+          "type": "prometheus",
+          "uid": "${Datasource}"
         },
-        "definition": "label_values(owner)",
+        "definition": "label_values(kubernetes_pod_name)",
         "hide": 0,
         "includeAll": true,
-        "label": null,
         "multi": true,
-        "name": "owner",
+        "name": "kubernetes_pod_name",
         "options": [],
-        "query": "label_values(owner)",
+        "query": {
+          "query": "label_values(kubernetes_pod_name)",
+          "refId": "Prometheus-kubernetes_pod_name-Variable-Query"
+        },
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
         "sort": 0,
         "tagValuesQuery": "",
-        "tags": [],
         "tagsQuery": "",
         "type": "query",
         "useTags": false
       },
       {
-        "allValue": null,
         "current": {
           "selected": true,
           "text": [
@@ -4319,8 +4302,8 @@
           ]
         },
         "datasource": {
-          "uid": "${Datasource}",
-          "type": "prometheus"
+          "type": "prometheus",
+          "uid": "${Datasource}"
         },
         "definition": "label_values(protocol_id)",
         "hide": 0,
@@ -4329,13 +4312,15 @@
         "multi": true,
         "name": "rpc_protocol",
         "options": [],
-        "query": "label_values(protocol_id)",
+        "query": {
+          "query": "label_values(protocol_id)",
+          "refId": "Prometheus-rpc_protocol-Variable-Query"
+        },
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
         "sort": 0,
         "tagValuesQuery": "",
-        "tags": [],
         "tagsQuery": "",
         "type": "query",
         "useTags": false
@@ -4408,7 +4393,7 @@
     ]
   },
   "time": {
-    "from": "now-3h",
+    "from": "now-1h",
     "to": "now"
   },
   "timepicker": {
@@ -4439,5 +4424,6 @@
   "timezone": "",
   "title": "Network",
   "uid": "network",
-  "version": 10
+  "version": 1,
+  "weekStart": ""
 }

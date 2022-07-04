@@ -1,8 +1,18 @@
-nodeUrl:
+nodeUrl: https://fullnode.devnet.aptoslabs.com
+emitEvery: 1000
+batchSize: 10
+indexTokenData: false
 
 indexer:
   image:
-    repo: aptoslab/indexer
+    repo: aptoslabs/indexer
+    tag: devnet
+    pullPolicy: IfNotPresent
+
+indexer_server:
+  enabled: false
+  image:
+    repo: aptoslabs/indexer-server
     tag: devnet
     pullPolicy: IfNotPresent
 
@@ -15,14 +25,6 @@ nginx:
     tag: latest
     pullPolicy: IfNotPresent
 
-resources:
-  limits:
-    cpu: 2
-    memory: 4Gi
-  requests:
-    cpu: 2
-    memory: 4Gi
-
 nodeSelector: {}
 tolerations: []
 affinity: {}
@@ -33,4 +35,11 @@ serviceAccount:
   # The name of the service account to use.
   # If not set and create is true, a name is generated using the fullname template
   name:
+  annotations: {}
+
+service:
+  # Change this to LoadBalancer to expose the indexer server endpoint externally
+  type: ClusterIP
+  externalTrafficPolicy:
+  loadBalancerSourceRanges: []
   annotations: {}

@@ -28,7 +28,9 @@ pub use self::{
     aptos_version::{
         Version, APTOS_MAX_KNOWN_VERSION, APTOS_VERSION_2, APTOS_VERSION_3, APTOS_VERSION_4,
     },
-    consensus_config::{ConsensusConfigV1, ConsensusConfigV2, OnChainConsensusConfig},
+    consensus_config::{
+        ConsensusConfigV1, LeaderReputationType, OnChainConsensusConfig, ProposerElectionType,
+    },
     registered_currencies::RegisteredCurrencies,
     validator_set::ValidatorSet,
     vm_config::VMConfig,
@@ -161,7 +163,7 @@ pub trait OnChainConfig: Send + Sync + DeserializeOwned {
 }
 
 pub fn new_epoch_event_key() -> EventKey {
-    EventKey::new_from_address(&config_address(), 4)
+    EventKey::new_from_address(&config_address(), 5)
 }
 
 pub fn struct_tag_for_config(config_name: Identifier) -> StructTag {

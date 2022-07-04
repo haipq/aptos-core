@@ -5,11 +5,11 @@
 
 use crate::{DbReader, DbWriter};
 use anyhow::{anyhow, Result};
+use aptos_crypto::HashValue;
 use aptos_types::{
     account_address::AccountAddress,
     account_config::AccountResource,
     account_state::AccountState,
-    proof::SparseMerkleProof,
     state_store::{state_key::StateKey, state_value::StateValue},
     transaction::Version,
 };
@@ -37,16 +37,18 @@ impl DbReader for MockDbReaderWriter {
         Ok(Some(1))
     }
 
-    fn get_state_value_with_proof_by_version(
+    fn get_latest_state_checkpoint(&self) -> Result<Option<(Version, HashValue)>> {
+        // return a dummy version for tests
+        Ok(Some((1, HashValue::zero())))
+    }
+
+    fn get_state_value_by_version(
         &self,
         state_key: &StateKey,
         _: Version,
-    ) -> Result<(Option<StateValue>, SparseMerkleProof<StateValue>)> {
+    ) -> Result<Option<StateValue>> {
         // dummy proof which is not used
-        Ok((
-            self.get_latest_state_value(state_key.clone()).unwrap(),
-            SparseMerkleProof::new(None, vec![]),
-        ))
+        Ok(self.get_latest_state_value(state_key.clone()).unwrap())
     }
 }
 

@@ -3,10 +3,11 @@
 
 use crate::{
     common::{
-        init::DEFAULT_REST_URL,
+        init::{DEFAULT_FAUCET_URL, DEFAULT_REST_URL},
         utils::{
-            check_if_file_exists, read_from_file, to_common_result, to_common_success_result,
-            write_to_file,
+            chain_id, check_if_file_exists, get_sequence_number, read_from_file, to_common_result,
+            to_common_success_result, write_to_file, write_to_file_with_opts,
+            write_to_user_only_file,
         },
     },
     genesis::git::from_yaml,
@@ -15,16 +16,31 @@ use aptos_crypto::{
     ed25519::{Ed25519PrivateKey, Ed25519PublicKey},
     x25519, PrivateKey, ValidCryptoMaterial, ValidCryptoMaterialStringExt,
 };
+use aptos_keygen::KeyGen;
 use aptos_logger::debug;
 use aptos_rest_client::{aptos_api_types::WriteSetChange, Client, Transaction};
-use aptos_types::{chain_id::ChainId, transaction::authenticator::AuthenticationKey};
+use aptos_sdk::{
+    move_types::{
+        ident_str,
+        language_storage::{ModuleId, TypeTag},
+    },
+    transaction_builder::TransactionFactory,
+    types::LocalAccount,
+};
+use aptos_types::transaction::{
+    authenticator::AuthenticationKey, ScriptFunction, TransactionPayload,
+};
 use async_trait::async_trait;
 use clap::{ArgEnum, Parser};
+use hex::FromHexError;
 use move_deps::move_core_types::account_address::AccountAddress;
 use serde::{Deserialize, Serialize};
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
 use std::{
     collections::{BTreeMap, HashMap},
-    fmt::Debug,
+    fmt::{Debug, Display, Formatter},
+    fs::OpenOptions,
     path::{Path, PathBuf},
     str::FromStr,
     time::Instant,
@@ -111,6 +127,30 @@ impl From<base64::DecodeError> for CliError {
 
 impl From<std::string::FromUtf8Error> for CliError {
     fn from(e: std::string::FromUtf8Error) -> Self {
+        CliError::UnexpectedError(e.to_string())
+    }
+}
+
+impl From<aptos_crypto::CryptoMaterialError> for CliError {
+    fn from(e: aptos_crypto::CryptoMaterialError) -> Self {
+        CliError::UnexpectedError(e.to_string())
+    }
+}
+
+impl From<hex::FromHexError> for CliError {
+    fn from(e: FromHexError) -> Self {
+        CliError::UnexpectedError(e.to_string())
+    }
+}
+
+impl From<anyhow::Error> for CliError {
+    fn from(e: anyhow::Error) -> Self {
+        CliError::UnexpectedError(e.to_string())
+    }
+}
+
+impl From<bcs::Error> for CliError {
+    fn from(e: bcs::Error) -> Self {
         CliError::UnexpectedError(e.to_string())
     }
 }
@@ -221,7 +261,8 @@ impl CliConfig {
         let config_bytes = serde_yaml::to_string(&self).map_err(|err| {
             CliError::UnexpectedError(format!("Failed to serialize config {}", err))
         })?;
-        write_to_file(&config_file, CONFIG_FILE, config_bytes.as_bytes())?;
+
+        write_to_user_only_file(&config_file, CONFIG_FILE, config_bytes.as_bytes())?;
 
         // As a cleanup, delete the old if it exists
         let legacy_config_file = aptos_folder.join(LEGACY_CONFIG_FILE);
@@ -251,6 +292,16 @@ pub enum KeyType {
     X25519,
 }
 
+impl Display for KeyType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            KeyType::Ed25519 => "ed25519",
+            KeyType::X25519 => "x25519",
+        };
+        write!(f, "{}", str)
+    }
+}
+
 impl FromStr for KeyType {
     type Err = &'static str;
 
@@ -268,6 +319,26 @@ pub struct ProfileOptions {
     /// Profile to use from config
     #[clap(long, default_value = "default")]
     pub profile: String,
+}
+
+impl ProfileOptions {
+    pub fn account_address(&self) -> CliTypedResult<AccountAddress> {
+        if let Some(profile) = CliConfig::load_profile(&self.profile)? {
+            if let Some(account) = profile.account {
+                return Ok(account);
+            }
+        }
+
+        Err(CliError::ConfigNotFoundError(self.profile.clone()))
+    }
+}
+
+impl Default for ProfileOptions {
+    fn default() -> Self {
+        Self {
+            profile: "default".to_string(),
+        }
+    }
 }
 
 /// Types of encodings used by the blockchain
@@ -329,6 +400,54 @@ impl EncodingType {
     }
 }
 
+#[derive(Clone, Debug, Parser)]
+pub struct RngArgs {
+    /// The seed used for key generation, should be a 64 character hex string and mainly used for testing
+    ///
+    /// This field is hidden from the CLI input for now
+    #[clap(skip)]
+    random_seed: Option<String>,
+}
+
+impl RngArgs {
+    pub fn from_seed(seed: [u8; 32]) -> RngArgs {
+        RngArgs {
+            random_seed: Some(hex::encode(seed)),
+        }
+    }
+
+    /// Returns a key generator with the seed if given
+    pub fn key_generator(&self) -> CliTypedResult<KeyGen> {
+        if let Some(ref seed) = self.random_seed {
+            // Strip 0x
+            let seed = seed.strip_prefix("0x").unwrap_or(seed);
+            let mut seed_slice = [0u8; 32];
+
+            hex::decode_to_slice(seed, &mut seed_slice)?;
+            Ok(KeyGen::from_seed(seed_slice))
+        } else {
+            Ok(KeyGen::from_os_rng())
+        }
+    }
+}
+
+impl Default for EncodingType {
+    fn default() -> Self {
+        EncodingType::Hex
+    }
+}
+
+impl Display for EncodingType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            EncodingType::BCS => "bcs",
+            EncodingType::Hex => "hex",
+            EncodingType::Base64 => "base64",
+        };
+        write!(f, "{}", str)
+    }
+}
+
 impl FromStr for EncodingType {
     type Err = &'static str;
 
@@ -353,11 +472,20 @@ pub struct PromptOptions {
     pub assume_no: bool,
 }
 
+impl PromptOptions {
+    pub fn yes() -> Self {
+        Self {
+            assume_yes: true,
+            assume_no: false,
+        }
+    }
+}
+
 /// An insertable option for use with encodings.
-#[derive(Debug, Parser)]
+#[derive(Debug, Default, Parser)]
 pub struct EncodingOptions {
     /// Encoding of data as `base64`, `bcs`, or `hex`
-    #[clap(long, default_value = "hex")]
+    #[clap(long, default_value_t = EncodingType::Hex)]
     pub encoding: EncodingType,
 }
 
@@ -390,7 +518,7 @@ impl ExtractPublicKey for PublicKeyInputOptions {
     }
 }
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Default, Parser)]
 pub struct PrivateKeyInputOptions {
     /// Private key input file name
     #[clap(long, group = "private_key_input", parse(from_os_str))]
@@ -401,6 +529,17 @@ pub struct PrivateKeyInputOptions {
 }
 
 impl PrivateKeyInputOptions {
+    pub fn from_private_key(private_key: &Ed25519PrivateKey) -> CliTypedResult<Self> {
+        Ok(PrivateKeyInputOptions {
+            private_key: Some(
+                private_key
+                    .to_encoded_string()
+                    .map_err(|err| CliError::UnexpectedError(err.to_string()))?,
+            ),
+            private_key_file: None,
+        })
+    }
+
     /// Extract private key from CLI args with fallback to config
     pub fn extract_private_key(
         &self,
@@ -493,19 +632,31 @@ impl SaveFile {
     pub fn save_to_file(&self, name: &str, bytes: &[u8]) -> CliTypedResult<()> {
         write_to_file(self.output_file.as_path(), name, bytes)
     }
+
+    /// Save to the `output_file` with restricted permissions (mode 0600)
+    pub fn save_to_file_confidential(&self, name: &str, bytes: &[u8]) -> CliTypedResult<()> {
+        let mut opts = OpenOptions::new();
+        #[cfg(unix)]
+        opts.mode(0o600);
+        write_to_file_with_opts(self.output_file.as_path(), name, bytes, &mut opts)
+    }
 }
 
 /// Options specific to using the Rest endpoint
-#[derive(Debug, Parser)]
+#[derive(Debug, Default, Parser)]
 pub struct RestOptions {
     /// URL to a fullnode on the network
     ///
-    /// Defaults to https://fullnode.devnet.aptoslabs.com
+    /// Defaults to <https://fullnode.devnet.aptoslabs.com>
     #[clap(long, parse(try_from_str))]
-    pub url: Option<reqwest::Url>,
+    url: Option<reqwest::Url>,
 }
 
 impl RestOptions {
+    pub fn new(url: Option<reqwest::Url>) -> Self {
+        RestOptions { url }
+    }
+
     /// Retrieve the URL from the profile or the command line
     pub fn url(&self, profile: &str) -> CliTypedResult<reqwest::Url> {
         if let Some(ref url) = self.url {
@@ -519,32 +670,9 @@ impl RestOptions {
             })
         }
     }
-}
 
-/// Options specific to submitting a private key to the Rest endpoint
-#[derive(Debug, Parser)]
-pub struct WriteTransactionOptions {
-    #[clap(flatten)]
-    pub private_key_options: PrivateKeyInputOptions,
-    #[clap(flatten)]
-    pub rest_options: RestOptions,
-    /// Maximum gas to be used to publish the package
-    ///
-    /// Defaults to 1000 gas units
-    #[clap(long, default_value_t = 1000)]
-    pub max_gas: u64,
-}
-
-impl WriteTransactionOptions {
-    /// Retrieve the chain id from onchain via the Rest API
-    pub async fn chain_id(&self, profile: &str) -> CliTypedResult<ChainId> {
-        let client = Client::new(self.rest_options.url(profile)?);
-        let state = client
-            .get_ledger_information()
-            .await
-            .map_err(|err| CliError::ApiError(err.to_string()))?
-            .into_inner();
-        Ok(ChainId::new(state.chain_id))
+    pub fn client(&self, profile: &str) -> CliTypedResult<Client> {
+        Ok(Client::new(self.url(profile)?))
     }
 }
 
@@ -729,4 +857,137 @@ pub struct ChangeSummary {
     resource: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     value: Option<String>,
+}
+
+#[derive(Debug, Default, Parser)]
+pub struct FaucetOptions {
+    /// URL for the faucet
+    #[clap(long)]
+    faucet_url: Option<reqwest::Url>,
+}
+
+impl FaucetOptions {
+    pub fn new(faucet_url: Option<reqwest::Url>) -> Self {
+        FaucetOptions { faucet_url }
+    }
+
+    pub fn faucet_url(&self, profile: &str) -> CliTypedResult<reqwest::Url> {
+        if let Some(ref faucet_url) = self.faucet_url {
+            Ok(faucet_url.clone())
+        } else if let Some(Some(url)) =
+            CliConfig::load_profile(profile)?.map(|profile| profile.faucet_url)
+        {
+            reqwest::Url::parse(&url)
+                .map_err(|err| CliError::UnableToParse("config faucet_url", err.to_string()))
+        } else {
+            reqwest::Url::parse(DEFAULT_FAUCET_URL).map_err(|err| {
+                CliError::UnexpectedError(format!("Failed to parse default faucet URL {}", err))
+            })
+        }
+    }
+}
+
+pub const DEFAULT_MAX_GAS: u64 = 1000;
+pub const DEFAULT_GAS_UNIT_PRICE: u64 = 1;
+
+/// Gas price options for manipulating how to prioritize transactions
+#[derive(Debug, Eq, Parser, PartialEq)]
+pub struct GasOptions {
+    /// Amount to increase gas bid by for a transaction
+    ///
+    /// Defaults to 1 coin per gas unit
+    #[clap(long, default_value_t = DEFAULT_GAS_UNIT_PRICE)]
+    pub gas_unit_price: u64,
+    /// Maximum gas to be used to send a transaction
+    ///
+    /// Defaults to 1000 gas units
+    #[clap(long, default_value_t = DEFAULT_MAX_GAS)]
+    pub max_gas: u64,
+}
+
+impl Default for GasOptions {
+    fn default() -> Self {
+        GasOptions {
+            gas_unit_price: DEFAULT_GAS_UNIT_PRICE,
+            max_gas: DEFAULT_MAX_GAS,
+        }
+    }
+}
+
+/// Common options for interacting with an account for a validator
+#[derive(Debug, Default, Parser)]
+pub struct TransactionOptions {
+    #[clap(flatten)]
+    pub(crate) private_key_options: PrivateKeyInputOptions,
+    #[clap(flatten)]
+    pub(crate) encoding_options: EncodingOptions,
+    #[clap(flatten)]
+    pub(crate) profile_options: ProfileOptions,
+    #[clap(flatten)]
+    pub(crate) rest_options: RestOptions,
+    #[clap(flatten)]
+    pub(crate) gas_options: GasOptions,
+}
+
+impl TransactionOptions {
+    /// Retrieves the private key
+    fn private_key(&self) -> CliTypedResult<Ed25519PrivateKey> {
+        self.private_key_options.extract_private_key(
+            self.encoding_options.encoding,
+            &self.profile_options.profile,
+        )
+    }
+
+    /// Builds a rest client
+    fn rest_client(&self) -> CliTypedResult<Client> {
+        self.rest_options.client(&self.profile_options.profile)
+    }
+
+    /// Submits a script function based on module name and function inputs
+    pub async fn submit_script_function(
+        &self,
+        address: AccountAddress,
+        module: &'static str,
+        function: &'static str,
+        type_args: Vec<TypeTag>,
+        args: Vec<Vec<u8>>,
+    ) -> CliTypedResult<Transaction> {
+        let txn = TransactionPayload::ScriptFunction(ScriptFunction::new(
+            ModuleId::new(address, ident_str!(module).to_owned()),
+            ident_str!(function).to_owned(),
+            type_args,
+            args,
+        ));
+        self.submit_transaction(txn).await
+    }
+
+    /// Submit a transaction
+    pub async fn submit_transaction(
+        &self,
+        payload: TransactionPayload,
+    ) -> CliTypedResult<Transaction> {
+        let sender_key = self.private_key()?;
+        let client = self.rest_client()?;
+
+        // Get sender address
+        let sender_address = AuthenticationKey::ed25519(&sender_key.public_key()).derived_address();
+        let sender_address = AccountAddress::new(*sender_address);
+
+        // Get sequence number for account
+        let sequence_number = get_sequence_number(&client, sender_address).await?;
+
+        // Sign and submit transaction
+        let transaction_factory = TransactionFactory::new(chain_id(&client).await?)
+            .with_gas_unit_price(self.gas_options.gas_unit_price)
+            .with_max_gas_amount(self.gas_options.max_gas);
+        let sender_account = &mut LocalAccount::new(sender_address, sender_key, sequence_number);
+        let transaction =
+            sender_account.sign_with_transaction_builder(transaction_factory.payload(payload));
+        let response = client
+            .submit_and_wait(&transaction)
+            .await
+            .map_err(|err| CliError::ApiError(err.to_string()))?;
+
+        Ok(response.into_inner())
+    }
 }

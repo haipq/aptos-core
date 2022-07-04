@@ -1,10 +1,10 @@
 // Copyright (c) Aptos
 // SPDX-License-Identifier: Apache-2.0
 
-use aptos_metrics::{
-    register_histogram, register_histogram_vec, register_int_counter, register_int_counter_vec,
-    register_int_gauge, DurationHistogram, Histogram, HistogramVec, IntCounter, IntCounterVec,
-    IntGauge,
+use aptos_metrics_core::{
+    op_counters::DurationHistogram, register_histogram, register_histogram_vec,
+    register_int_counter, register_int_counter_vec, register_int_gauge, Histogram, HistogramVec,
+    IntCounter, IntCounterVec, IntGauge,
 };
 use once_cell::sync::Lazy;
 
@@ -13,9 +13,10 @@ use once_cell::sync::Lazy;
 //////////////////////
 
 /// Monitor counters, used by monitor! macro
-pub static OP_COUNTERS: Lazy<aptos_metrics::OpMetrics> =
-    Lazy::new(|| aptos_metrics::OpMetrics::new_and_registered("consensus"));
+pub static OP_COUNTERS: Lazy<aptos_metrics_core::op_counters::OpMetrics> =
+    Lazy::new(|| aptos_metrics_core::op_counters::OpMetrics::new_and_registered("consensus"));
 
+/// Counts the total number of errors
 pub static ERROR_COUNT: Lazy<IntGauge> = Lazy::new(|| {
     register_int_gauge!(
         "aptos_consensus_error_count",
@@ -89,6 +90,15 @@ pub static COMMITTED_PROPOSALS_IN_WINDOW: Lazy<IntGauge> = Lazy::new(|| {
     .unwrap()
 });
 
+/// Failed proposals from this validator when using LeaderReputation as the ProposerElection
+pub static FAILED_PROPOSALS_IN_WINDOW: Lazy<IntGauge> = Lazy::new(|| {
+    register_int_gauge!(
+        "aptos_failed_proposals_in_window",
+        "Total number of this validator's committed proposals in the current reputation window"
+    )
+    .unwrap()
+});
+
 /// Committed votes from this validator when using LeaderReputation as the ProposerElection
 pub static COMMITTED_VOTES_IN_WINDOW: Lazy<IntGauge> = Lazy::new(|| {
     register_int_gauge!(
@@ -99,9 +109,9 @@ pub static COMMITTED_VOTES_IN_WINDOW: Lazy<IntGauge> = Lazy::new(|| {
 });
 
 /// The number of block events the LeaderReputation uses
-pub static LEADER_REPUTATION_WINDOW_SIZE: Lazy<IntGauge> = Lazy::new(|| {
+pub static LEADER_REPUTATION_HISTORY_SIZE: Lazy<IntGauge> = Lazy::new(|| {
     register_int_gauge!(
-        "aptos_leader_reputation_window_size",
+        "aptos_leader_reputation_history_size",
         "Total number of new block events in the current reputation window"
     )
     .unwrap()
@@ -216,6 +226,7 @@ pub static NUM_TXNS_PER_BLOCK: Lazy<Histogram> = Lazy::new(|| {
     .unwrap()
 });
 
+/// Traces block movement throughout the node
 pub static BLOCK_TRACING: Lazy<HistogramVec> = Lazy::new(|| {
     register_histogram_vec!(
         "aptos_consensus_block_tracing",
@@ -271,6 +282,16 @@ pub static PENDING_STATE_SYNC_NOTIFICATION: Lazy<IntGauge> = Lazy::new(|| {
     .unwrap()
 });
 
+/// Count of the pending quorum store commit notification.
+pub static PENDING_QUORUM_STORE_COMMIT_NOTIFICATION: Lazy<IntGauge> = Lazy::new(|| {
+    register_int_gauge!(
+        "aptos_consensus_pending_quorum_store_commit_notification",
+        "Count of the pending quorum store commit notification"
+    )
+    .unwrap()
+});
+
+/// Counters related to pending commit votes
 pub static BUFFER_MANAGER_MSGS: Lazy<IntCounterVec> = Lazy::new(|| {
     register_int_counter_vec!(
         "aptos_consensus_buffer_manager_msgs_count",

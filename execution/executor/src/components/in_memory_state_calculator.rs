@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::components::apply_chunk_output::ParsedTransactionOutput;
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, ensure, Result};
 use aptos_crypto::{hash::CryptoHash, HashValue};
-use aptos_state_view::account_with_state_cache::AsAccountWithStateCache;
+use aptos_state_view::{account_with_state_cache::AsAccountWithStateCache, StateViewId};
 use aptos_types::{
     account_view::AccountView,
     epoch_state::EpochState,
@@ -25,7 +25,10 @@ use std::{
     sync::Arc,
 };
 use storage_interface::{
-    in_memory_state::InMemoryState, verified_state_view::StateCache, DbReader, TreeState,
+    cached_state_view::{CachedStateView, StateCache},
+    in_memory_state::InMemoryState,
+    sync_proof_fetcher::SyncProofFetcher,
+    DbReader, TreeState,
 };
 
 pub trait IntoLedgerView {
@@ -33,19 +36,53 @@ pub trait IntoLedgerView {
 }
 
 impl IntoLedgerView for TreeState {
-    fn into_ledger_view(self, _db: &Arc<dyn DbReader>) -> Result<ExecutedTrees> {
-        let checkpoint_num_txns = self.num_transactions;
-        let checkpoint =
-            InMemoryState::new_at_checkpoint(self.state_root_hash, checkpoint_num_txns);
+    fn into_ledger_view(self, db: &Arc<dyn DbReader>) -> Result<ExecutedTrees> {
+        let checkpoint_state = InMemoryState::new_at_checkpoint(
+            self.state_checkpoint_hash,
+            self.state_checkpoint_version,
+        );
+        let checkpoint_next_version = self.state_checkpoint_version.map_or(0, |v| v + 1);
+
+        ensure!(
+            checkpoint_next_version <= self.num_transactions,
+            "checkpoint is after latest version. checkpoint_next_version: {}, num_transactions: {}",
+            checkpoint_next_version,
+            self.num_transactions,
+        );
+
+        let state = if self.num_transactions == checkpoint_next_version {
+            checkpoint_state
+        } else {
+            ensure!(
+                self.num_transactions - checkpoint_next_version <= MAX_WRITE_SETS_AFTER_CHECKPOINT,
+                "Too many versions after state checkpoint. checkpoint_next_version: {}, num_transactions: {}",
+                checkpoint_next_version,
+                self.num_transactions,
+            );
+            let checkpoint_state_view = CachedStateView::new(
+                StateViewId::Miscellaneous,
+                db.clone(),
+                self.num_transactions,
+                checkpoint_state.checkpoint.clone(),
+                Arc::new(SyncProofFetcher::new(db.clone())),
+            )?;
+            let write_sets = db.get_write_sets(checkpoint_next_version, self.num_transactions)?;
+            checkpoint_state_view.prime_cache_by_write_set(&write_sets)?;
+            let state_cache = checkpoint_state_view.into_state_cache();
+            let calculator = InMemoryStateCalculator::new(&checkpoint_state, state_cache);
+            calculator.calculate_for_write_sets_after_checkpoint(&write_sets)?
+        };
 
         let transaction_accumulator = Arc::new(InMemoryAccumulator::new(
             self.ledger_frozen_subtree_hashes,
             self.num_transactions,
         )?);
 
-        Ok(ExecutedTrees::new(checkpoint, transaction_accumulator))
+        Ok(ExecutedTrees::new(state, transaction_accumulator))
     }
 }
+
+const MAX_WRITE_SETS_AFTER_CHECKPOINT: LeafCount = 200_000;
 
 pub static NEW_EPOCH_EVENT_KEY: Lazy<EventKey> = Lazy::new(on_chain_config::new_epoch_event_key);
 
@@ -70,7 +107,7 @@ pub(crate) struct InMemoryStateCalculator {
     proof_reader: ProofReader,
 
     checkpoint: SparseMerkleTree<StateValue>,
-    checkpoint_num_transactions: LeafCount,
+    checkpoint_version: Option<Version>,
     // This doesn't need to be frozen since `_frozen_base` holds a ref to the oldest ancestor
     // already, but frozen SMT is used here anyway to avoid exposing the `batch_update()` interface
     // on the non-frozen SMT.
@@ -82,7 +119,7 @@ pub(crate) struct InMemoryStateCalculator {
 }
 
 impl InMemoryStateCalculator {
-    pub fn new(base: &InMemoryState, state_cache: StateCache, next_version: Version) -> Self {
+    pub fn new(base: &InMemoryState, state_cache: StateCache) -> Self {
         let StateCache {
             frozen_base,
             state_cache,
@@ -90,8 +127,9 @@ impl InMemoryStateCalculator {
         } = state_cache;
         let InMemoryState {
             checkpoint,
-            checkpoint_num_transactions,
+            checkpoint_version,
             current,
+            current_version,
             updated_since_checkpoint,
         } = base.clone();
 
@@ -100,9 +138,9 @@ impl InMemoryStateCalculator {
             state_cache,
             proof_reader: ProofReader::new(proofs),
             checkpoint,
-            checkpoint_num_transactions,
+            checkpoint_version,
             latest: current.freeze(),
-            next_version,
+            next_version: current_version.map_or(0, |v| v + 1),
             updated_between_checkpoint_and_latest: updated_since_checkpoint,
             updated_after_latest: HashSet::new(),
         }
@@ -171,8 +209,7 @@ impl InMemoryStateCalculator {
         } else {
             match txn {
                 Transaction::BlockMetadata(_) | Transaction::UserTransaction(_) => {
-                    // TODO(aldenhu): replace with: Ok((HashMap::new(), HashMap::new(), None))
-                    self.checkpoint()
+                    Ok((HashMap::new(), HashMap::new(), None))
                 }
                 Transaction::GenesisTransaction(_) | Transaction::StateCheckpoint => {
                     self.checkpoint()
@@ -218,7 +255,7 @@ impl InMemoryStateCalculator {
         // Move self to the new checkpoint.
         self.latest = new_checkpoint.clone();
         self.checkpoint = new_checkpoint.unfreeze();
-        self.checkpoint_num_transactions = self.next_version;
+        self.checkpoint_version = self.next_version.checked_sub(1);
         self.updated_between_checkpoint_and_latest = HashSet::new();
         self.updated_after_latest = HashSet::new();
 
@@ -272,18 +309,18 @@ impl InMemoryStateCalculator {
 
         let result_state = InMemoryState::new(
             self.checkpoint,
-            self.checkpoint_num_transactions,
+            self.checkpoint_version,
             latest.unfreeze(),
+            self.next_version.checked_sub(1),
             updated_since_checkpoint,
         );
 
         Ok((result_state, self.state_cache))
     }
 
-    #[allow(dead_code)]
     pub fn calculate_for_write_sets_after_checkpoint(
         mut self,
-        write_sets: &[&WriteSet],
+        write_sets: &[WriteSet],
     ) -> Result<InMemoryState> {
         for write_set in write_sets {
             let state_updates =

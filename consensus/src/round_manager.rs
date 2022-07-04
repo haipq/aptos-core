@@ -12,10 +12,11 @@ use crate::{
         proposal_generator::ProposalGenerator,
         proposer_election::ProposerElection,
         round_state::{NewRoundEvent, NewRoundReason, RoundState, RoundStateLogSchema},
+        unequivocal_proposer_election::UnequivocalProposerElection,
     },
     logging::{LogEvent, LogSchema},
     metrics_safety_rules::MetricsSafetyRules,
-    network::{IncomingBlockRetrievalRequest, NetworkSender},
+    network::NetworkSender,
     network_interface::ConsensusMsg,
     pending_votes::VoteReceptionResult,
     persistent_liveness_storage::PersistentLivenessStorage,
@@ -23,7 +24,7 @@ use crate::{
 use anyhow::{bail, ensure, Context, Result};
 use aptos_infallible::{checked, Mutex};
 use aptos_logger::prelude::*;
-use aptos_metrics::monitor;
+use aptos_metrics_core::monitor;
 use aptos_types::{
     epoch_state::EpochState, on_chain_config::OnChainConsensusConfig,
     validator_verifier::ValidatorVerifier,
@@ -31,14 +32,12 @@ use aptos_types::{
 use channel::aptos_channel;
 use consensus_types::{
     block::Block,
-    block_retrieval::{BlockRetrievalResponse, BlockRetrievalStatus},
     common::{Author, Round},
     experimental::{commit_decision::CommitDecision, commit_vote::CommitVote},
     proposal_msg::ProposalMsg,
     quorum_cert::QuorumCert,
     sync_info::SyncInfo,
     timeout_2chain::TwoChainTimeoutCertificate,
-    timeout_certificate::TimeoutCertificate,
     vote::Vote,
     vote_msg::VoteMsg,
 };
@@ -116,7 +115,6 @@ pub enum VerifiedEvent {
     UnverifiedSyncInfo(Box<SyncInfo>),
     CommitVote(Box<CommitVote>),
     CommitDecision(Box<CommitDecision>),
-    BlockRetrievalRequest(Box<IncomingBlockRetrievalRequest>),
     // local messages
     LocalTimeout(Round),
     Shutdown(oneshot::Sender<()>),
@@ -139,7 +137,7 @@ pub struct RoundManager {
     epoch_state: EpochState,
     block_store: Arc<BlockStore>,
     round_state: RoundState,
-    proposer_election: Box<dyn ProposerElection + Send + Sync>,
+    proposer_election: UnequivocalProposerElection,
     proposal_generator: ProposalGenerator,
     safety_rules: Arc<Mutex<MetricsSafetyRules>>,
     network: NetworkSender,
@@ -167,16 +165,13 @@ impl RoundManager {
             .gauge("sync_only")
             .set(sync_only as i64);
         counters::OP_COUNTERS
-            .gauge("two_chain")
-            .set(onchain_config.two_chain() as i64);
-        counters::OP_COUNTERS
             .gauge("decoupled_execution")
             .set(onchain_config.decoupled_execution() as i64);
         Self {
             epoch_state,
             block_store,
             round_state,
-            proposer_election,
+            proposer_election: UnequivocalProposerElection::new(proposer_election),
             proposal_generator,
             safety_rules,
             network,
@@ -184,10 +179,6 @@ impl RoundManager {
             sync_only,
             onchain_config,
         }
-    }
-
-    fn two_chain(&self) -> bool {
-        self.onchain_config.two_chain()
     }
 
     fn decoupled_execution(&self) -> bool {
@@ -228,7 +219,7 @@ impl RoundManager {
                 counters::TIMEOUT_ROUNDS_COUNT.inc();
             }
         };
-        debug!(
+        info!(
             self.new_log(LogEvent::NewRound),
             reason = new_round_event.reason
         );
@@ -264,15 +255,16 @@ impl RoundManager {
                 .await;
         }
         .boxed();
+
         let proposal = self
             .proposal_generator
-            .generate_proposal(new_round_event.round, callback)
+            .generate_proposal(new_round_event.round, &mut self.proposer_election, callback)
             .await?;
         let signature = self.safety_rules.lock().sign_proposal(&proposal)?;
         let signed_proposal =
             Block::new_proposal_from_block_data_and_signature(proposal, signature);
         observe_block(signed_proposal.timestamp_usecs(), BlockStage::SIGNED);
-        debug!(self.new_log(LogEvent::Propose), "{}", signed_proposal);
+        info!(self.new_log(LogEvent::Propose), "{}", signed_proposal);
         Ok(ProposalMsg::new(
             signed_proposal,
             self.block_store.sync_info(),
@@ -281,7 +273,7 @@ impl RoundManager {
 
     /// Process the proposal message:
     /// 1. ensure after processing sync info, we're at the same round as the proposal
-    /// 2. execute and decide whether to vode for the proposal
+    /// 2. execute and decide whether to vote for the proposal
     pub async fn process_proposal_msg(&mut self, proposal_msg: ProposalMsg) -> anyhow::Result<()> {
         fail_point!("consensus::process_proposal_msg", |_| {
             Err(anyhow::anyhow!("Injected error in process_proposal_msg"))
@@ -291,6 +283,13 @@ impl RoundManager {
             proposal_msg.proposal().timestamp_usecs(),
             BlockStage::RECEIVED,
         );
+        info!(
+            self.new_log(LogEvent::ReceiveProposal)
+                .remote_peer(proposal_msg.proposer()),
+            block_hash = proposal_msg.proposal().id(),
+            block_parent_hash = proposal_msg.proposal().quorum_cert().certified_block().id(),
+        );
+
         if self
             .ensure_round_and_sync_up(
                 proposal_msg.proposal().round(),
@@ -321,6 +320,7 @@ impl RoundManager {
     ) -> anyhow::Result<()> {
         let local_sync_info = self.block_store.sync_info();
         if help_remote && local_sync_info.has_newer_certificates(sync_info) {
+            // TODO: we don't need to send them back if we're going to broadcast proposal with newer certificate
             counters::SYNC_INFO_MSGS_SENT_COUNT.inc();
             debug!(
                 self.new_log(LogEvent::HelpPeerSync).remote_peer(author),
@@ -331,9 +331,10 @@ impl RoundManager {
                 .await;
         }
         if sync_info.has_newer_certificates(&local_sync_info) {
-            debug!(
-                self.new_log(LogEvent::SyncToPeer).remote_peer(author),
-                "Local state {} is stale than remote state {}", local_sync_info, sync_info
+            info!(
+                self.new_log(LogEvent::ReceiveNewCertificate)
+                    .remote_peer(author),
+                "Local state {}, remote state {}", local_sync_info, sync_info
             );
             // Some information in SyncInfo is ahead of what we have locally.
             // First verify the SyncInfo (didn't verify it in the yet).
@@ -395,7 +396,7 @@ impl RoundManager {
         fail_point!("consensus::process_sync_info_msg", |_| {
             Err(anyhow::anyhow!("Injected error in process_sync_info_msg"))
         });
-        debug!(
+        info!(
             self.new_log(LogEvent::ReceiveSyncInfo).remote_peer(peer),
             "{}", sync_info
         );
@@ -454,44 +455,35 @@ impl RoundManager {
             bail!("[RoundManager] sync_only flag is set, broadcasting SyncInfo");
         }
 
-        let (use_last_vote, mut timeout_vote) = match self.round_state.vote_sent() {
-            Some(vote) if vote.vote_data().proposed().round() == round => (true, vote),
+        let (is_nil_vote, mut timeout_vote) = match self.round_state.vote_sent() {
+            Some(vote) if vote.vote_data().proposed().round() == round => {
+                (vote.vote_data().is_for_nil(), vote)
+            }
             _ => {
                 // Didn't vote in this round yet, generate a backup vote
                 let nil_block = self.proposal_generator.generate_nil_block(round)?;
-                debug!(
+                info!(
                     self.new_log(LogEvent::VoteNIL),
                     "Planning to vote for a NIL block {}", nil_block
                 );
                 counters::VOTE_NIL_COUNT.inc();
                 let nil_vote = self.execute_and_vote(nil_block).await?;
-                (false, nil_vote)
+                (true, nil_vote)
             }
         };
 
         if !timeout_vote.is_timeout() {
-            if self.two_chain() {
-                let timeout = timeout_vote.generate_2chain_timeout(
-                    self.block_store.highest_quorum_cert().as_ref().clone(),
-                );
-                let signature = self
-                    .safety_rules
-                    .lock()
-                    .sign_timeout_with_qc(
-                        &timeout,
-                        self.block_store.highest_2chain_timeout_cert().as_deref(),
-                    )
-                    .context("[RoundManager] SafetyRules signs 2-chain timeout")?;
-                timeout_vote.add_2chain_timeout(timeout, signature);
-            } else {
-                let timeout = timeout_vote.generate_timeout();
-                let signature = self
-                    .safety_rules
-                    .lock()
-                    .sign_timeout(&timeout)
-                    .context("[RoundManager] SafetyRules signs timeout")?;
-                timeout_vote.add_timeout_signature(signature);
-            }
+            let timeout = timeout_vote
+                .generate_2chain_timeout(self.block_store.highest_quorum_cert().as_ref().clone());
+            let signature = self
+                .safety_rules
+                .lock()
+                .sign_timeout_with_qc(
+                    &timeout,
+                    self.block_store.highest_2chain_timeout_cert().as_deref(),
+                )
+                .context("[RoundManager] SafetyRules signs 2-chain timeout")?;
+            timeout_vote.add_2chain_timeout(timeout, signature);
         }
 
         self.round_state.record_vote(timeout_vote.clone());
@@ -503,7 +495,7 @@ impl RoundManager {
         error!(
             round = round,
             remote_peer = self.proposer_election.get_valid_proposer(round),
-            voted = use_last_vote,
+            voted_nil = is_nil_vote,
             event = LogEvent::Timeout,
         );
         bail!("Round {} timeout, broadcast to all peers", round);
@@ -529,17 +521,25 @@ impl RoundManager {
             .author()
             .expect("Proposal should be verified having an author");
 
-        info!(
-            self.new_log(LogEvent::ReceiveProposal).remote_peer(author),
-            block_hash = proposal.id(),
-            block_parent_hash = proposal.quorum_cert().certified_block().id(),
-        );
-
         ensure!(
             self.proposer_election.is_valid_proposal(&proposal),
-            "[RoundManager] Proposer {} for block {} is not a valid proposer for this round",
+            "[RoundManager] Proposer {} for block {} is not a valid proposer for this round or created duplicate proposal",
             author,
             proposal,
+        );
+
+        // Validate that failed_authors list is correctly specified in the block.
+        let expected_failed_authors = self.proposal_generator.compute_failed_authors(
+            proposal.round(),
+            proposal.quorum_cert().certified_block().round(),
+            &mut self.proposer_election,
+        );
+        ensure!(
+            proposal.block_data().failed_authors().map_or(false, |failed_authors| *failed_authors == expected_failed_authors),
+            "[RoundManager] Proposal for block {} has invalid failed_authors list {:?}, expected {:?}",
+            proposal.round(),
+            proposal.block_data().failed_authors(),
+            expected_failed_authors,
         );
 
         let block_time_since_epoch = Duration::from_micros(proposal.timestamp_usecs());
@@ -560,14 +560,17 @@ impl RoundManager {
             .await
             .context("[RoundManager] Process proposal")?;
 
-        let recipients = self
+        let recipient = self
             .proposer_election
             .get_valid_proposer(proposal_round + 1);
-        debug!(self.new_log(LogEvent::Vote).remote_peer(author), "{}", vote);
+        info!(
+            self.new_log(LogEvent::Vote).remote_peer(recipient),
+            "{}", vote
+        );
 
         self.round_state.record_vote(vote.clone());
         let vote_msg = VoteMsg::new(vote, self.block_store.sync_info());
-        self.network.send_vote(vote_msg, vec![recipients]).await;
+        self.network.send_vote(vote_msg, vec![recipient]).await;
         Ok(())
     }
 
@@ -597,23 +600,19 @@ impl RoundManager {
 
         let maybe_signed_vote_proposal =
             executed_block.maybe_signed_vote_proposal(self.decoupled_execution());
-        let vote_result = if self.two_chain() {
-            self.safety_rules.lock().construct_and_sign_vote_two_chain(
-                &maybe_signed_vote_proposal,
-                self.block_store.highest_2chain_timeout_cert().as_deref(),
-            )
-        } else {
-            self.safety_rules
-                .lock()
-                .construct_and_sign_vote(&maybe_signed_vote_proposal)
-        };
+        let vote_result = self.safety_rules.lock().construct_and_sign_vote_two_chain(
+            &maybe_signed_vote_proposal,
+            self.block_store.highest_2chain_timeout_cert().as_deref(),
+        );
         let vote = vote_result.context(format!(
             "[RoundManager] SafetyRules {}Rejected{} {}",
             Fg(Red),
             Fg(Reset),
             executed_block.block()
         ))?;
-        observe_block(executed_block.block().timestamp_usecs(), BlockStage::VOTED);
+        if !executed_block.block().is_nil_block() {
+            observe_block(executed_block.block().timestamp_usecs(), BlockStage::VOTED);
+        }
 
         self.storage
             .save_vote(&vote)
@@ -665,6 +664,7 @@ impl RoundManager {
             vote_round = vote.vote_data().proposed().round(),
             vote_id = vote.vote_data().proposed().id(),
             vote_state = vote.vote_data().proposed().executed_state_id(),
+            is_timeout = vote.is_timeout(),
         );
 
         if !vote.is_timeout() {
@@ -693,9 +693,14 @@ impl RoundManager {
             .insert_vote(vote, &self.epoch_state.verifier)
         {
             VoteReceptionResult::NewQuorumCertificate(qc) => {
+                if !vote.is_timeout() {
+                    observe_block(
+                        qc.certified_block().timestamp_usecs(),
+                        BlockStage::QC_AGGREGATED,
+                    );
+                }
                 self.new_qc_aggregated(qc, vote.author()).await
             }
-            VoteReceptionResult::NewTimeoutCertificate(tc) => self.new_tc_aggregated(tc).await,
             VoteReceptionResult::New2ChainTimeoutCertificate(tc) => {
                 self.new_2chain_tc_aggregated(tc).await
             }
@@ -708,24 +713,11 @@ impl RoundManager {
         qc: Arc<QuorumCert>,
         preferred_peer: Author,
     ) -> anyhow::Result<()> {
-        observe_block(
-            qc.certified_block().timestamp_usecs(),
-            BlockStage::QC_AGGREGATED,
-        );
         let result = self
             .block_store
             .insert_quorum_cert(&qc, &mut self.create_block_retriever(preferred_peer))
             .await
             .context("[RoundManager] Failed to process a newly aggregated QC");
-        self.process_certificates().await?;
-        result
-    }
-
-    async fn new_tc_aggregated(&mut self, tc: Arc<TimeoutCertificate>) -> anyhow::Result<()> {
-        let result = self
-            .block_store
-            .insert_timeout_certificate(tc.clone())
-            .context("[RoundManager] Failed to process a newly aggregated TC");
         self.process_certificates().await?;
         result
     }
@@ -740,51 +732,6 @@ impl RoundManager {
             .context("[RoundManager] Failed to process a newly aggregated 2-chain TC");
         self.process_certificates().await?;
         result
-    }
-
-    /// Retrieve a n chained blocks from the block store starting from
-    /// an initial parent id, returning with <n (as many as possible) if
-    /// id or its ancestors can not be found.
-    ///
-    /// The current version of the function is not really async, but keeping it this way for
-    /// future possible changes.
-    pub async fn process_block_retrieval(
-        &self,
-        request: IncomingBlockRetrievalRequest,
-    ) -> anyhow::Result<()> {
-        fail_point!("consensus::process_block_retrieval", |_| {
-            Err(anyhow::anyhow!("Injected error in process_block_retrieval"))
-        });
-        let mut blocks = vec![];
-        let mut status = BlockRetrievalStatus::Succeeded;
-        let mut id = request.req.block_id();
-        while (blocks.len() as u64) < request.req.num_blocks() {
-            if let Some(executed_block) = self.block_store.get_block(id) {
-                blocks.push(executed_block.block().clone());
-                if request.req.match_target_id(id) {
-                    status = BlockRetrievalStatus::SucceededWithTarget;
-                    break;
-                }
-                id = executed_block.parent_id();
-            } else {
-                status = BlockRetrievalStatus::NotEnoughBlocks;
-                break;
-            }
-        }
-
-        if blocks.is_empty() {
-            status = BlockRetrievalStatus::IdNotFound;
-        }
-
-        let response = Box::new(BlockRetrievalResponse::new(status, blocks));
-        let response_bytes = request
-            .protocol
-            .to_bytes(&ConsensusMsg::BlockRetrievalResponse(response))?;
-        request
-            .response_sender
-            .send(Ok(response_bytes.into()))
-            .map_err(|e| anyhow::anyhow!("{:?}", e))
-            .context("[RoundManager] Failed to process block retrieval")
     }
 
     /// To jump start new round with the current certificates we have.
@@ -850,12 +797,6 @@ impl RoundManager {
                     monitor!(
                         "process_sync_info",
                         self.process_sync_info_msg(*sync_info, peer_id).await
-                    )
-                }
-                VerifiedEvent::BlockRetrievalRequest(block_retrival) => {
-                    monitor!(
-                        "process_block_retrieval",
-                        self.process_block_retrieval(*block_retrival).await
                     )
                 }
                 VerifiedEvent::LocalTimeout(round) => monitor!(

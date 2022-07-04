@@ -2,25 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    get_first_seq_num_and_limit, schema::jellyfish_merkle_node::JellyfishMerkleNodeSchema,
-    test_helper, test_helper::arb_blocks_to_commit, AptosDB, APTOS_STORAGE_ROCKSDB_PROPERTIES,
+    error_if_version_is_pruned, get_first_seq_num_and_limit,
+    pruner::{Pruner, PrunerIndex},
+    test_helper,
+    test_helper::{arb_blocks_to_commit, put_as_state_root, put_transaction_info},
+    AptosDB, ROCKSDB_PROPERTIES,
 };
-use aptos_crypto::{
-    hash::{CryptoHash, SPARSE_MERKLE_PLACEHOLDER_HASH},
-    HashValue,
-};
-use aptos_jellyfish_merkle::node_type::{Node, NodeKey};
+use aptos_config::config::StoragePrunerConfig;
+use aptos_crypto::{hash::CryptoHash, HashValue};
 use aptos_temppath::TempPath;
 use aptos_types::{
     proof::SparseMerkleLeafNode,
-    state_store::{
-        state_key::StateKey,
-        state_value::{StateKeyAndValue, StateValue},
-    },
-    transaction::{ExecutionStatus, TransactionInfo, PRE_GENESIS_VERSION},
+    state_store::{state_key::StateKey, state_value::StateValue},
+    transaction::{ExecutionStatus, TransactionInfo},
 };
 use proptest::prelude::*;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 use storage_interface::{DbReader, Order, TreeState};
 use test_helper::{test_save_blocks_impl, test_sync_transactions_impl};
 
@@ -81,55 +78,81 @@ fn test_too_many_requested() {
 }
 
 #[test]
+fn test_error_if_version_is_pruned() {
+    let tmp_dir = TempPath::new();
+    let aptos_db = AptosDB::new_for_test(&tmp_dir);
+    let mut pruner = Pruner::new(
+        Arc::clone(&aptos_db.ledger_db),
+        Arc::clone(&aptos_db.state_merkle_db),
+        StoragePrunerConfig {
+            state_store_prune_window: Some(0),
+            ledger_prune_window: Some(0),
+            pruning_batch_size: 1,
+        },
+    );
+    pruner.testonly_update_min_version(&[Some(5), Some(10)]);
+    let pruner = Some(pruner);
+    assert_eq!(
+        error_if_version_is_pruned(&pruner, PrunerIndex::StateStorePrunerIndex, "State", 4)
+            .unwrap_err()
+            .to_string(),
+        "State version 4 is pruned, min available version is 5."
+    );
+    assert!(
+        error_if_version_is_pruned(&pruner, PrunerIndex::StateStorePrunerIndex, "State", 5).is_ok()
+    );
+    assert_eq!(
+        error_if_version_is_pruned(&pruner, PrunerIndex::LedgerPrunerIndex, "Transaction", 9)
+            .unwrap_err()
+            .to_string(),
+        "Transaction version 9 is pruned, min available version is 10."
+    );
+    assert!(
+        error_if_version_is_pruned(&pruner, PrunerIndex::LedgerPrunerIndex, "Transaction", 10)
+            .is_ok()
+    );
+}
+
+#[test]
 fn test_get_latest_tree_state() {
     let tmp_dir = TempPath::new();
     let db = AptosDB::new_for_test(&tmp_dir);
 
     // entirely emtpy db
     let empty = db.get_latest_tree_state().unwrap();
-    assert_eq!(
-        empty,
-        TreeState::new(0, vec![], *SPARSE_MERKLE_PLACEHOLDER_HASH,)
-    );
-
-    // unbootstrapped db with pre-genesis state
-    let key = StateKey::Raw(String::from("test_key").into_bytes());
-    let value = StateValue::from(String::from("test_val").into_bytes());
-
-    db.db
-        .put::<JellyfishMerkleNodeSchema>(
-            &NodeKey::new_empty_path(PRE_GENESIS_VERSION),
-            &Node::new_leaf(
-                key.hash(),
-                StateKeyAndValue::new(key.clone(), value.clone()),
-            ),
-        )
-        .unwrap();
-    let hash = SparseMerkleLeafNode::new(key.hash(), value.hash()).hash();
-    let pre_genesis = db.get_latest_tree_state().unwrap();
-    assert_eq!(pre_genesis, TreeState::new(0, vec![], hash));
+    assert_eq!(empty, TreeState::new_empty(),);
 
     // bootstrapped db (any transaction info is in)
+    let key = StateKey::Raw(String::from("test_key").into_bytes());
+    let value = StateValue::from(String::from("test_val").into_bytes());
+    let hash = SparseMerkleLeafNode::new(key.hash(), value.hash()).hash();
+    put_as_state_root(&db, 0, key, value);
     let txn_info = TransactionInfo::new(
         HashValue::random(),
         HashValue::random(),
         HashValue::random(),
-        Some(HashValue::random()),
+        Some(hash),
         0,
         ExecutionStatus::MiscellaneousError(None),
     );
-    test_helper::put_transaction_info(&db, 0, &txn_info);
+    put_transaction_info(&db, 0, &txn_info);
+
     let bootstrapped = db.get_latest_tree_state().unwrap();
     assert_eq!(
         bootstrapped,
-        TreeState::new(1, vec![txn_info.hash()], txn_info.state_change_hash(),)
+        TreeState::new(
+            1,
+            vec![txn_info.hash()],
+            txn_info.state_checkpoint_hash().unwrap(),
+            Some(0),
+        ),
     );
 }
 
 #[test]
 fn test_rocksdb_properties_reporter() {
     fn get_metric() -> i64 {
-        APTOS_STORAGE_ROCKSDB_PROPERTIES
+        ROCKSDB_PROPERTIES
             .get_metric_with_label_values(&[
                 "transaction_info",
                 "aptos_rocksdb_is-file-deletions-enabled",

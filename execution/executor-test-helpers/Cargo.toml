@@ -11,11 +11,12 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0.57"
-rand = "0.8.3"
+rand = "0.7.3"
 
 aptos-config = { path = "../../config" }
 aptos-crypto = { path = "../../crates/aptos-crypto" }
-aptos-genesis-tool = { path = "../../config/management/genesis", features = ["testing"] }
+aptos-genesis = { path = "../../crates/aptos-genesis", features = ["testing"] }
+aptos-sdk = { path = "../../sdk" }
 aptos-state-view = { path = "../../storage/state-view" }
 aptos-temppath = { path = "../../crates/aptos-temppath" }
 aptos-transaction-builder = { path = "../../sdk/transaction-builder" }
@@ -27,5 +28,4 @@ executor = { path = "../executor" }
 executor-types = { path = "../executor-types" }
 move-deps = { path = "../../aptos-move/move-deps", features = ["address32"] }
 storage-interface = { path = "../../storage/storage-interface" }
-storage-service = { path = "../../storage/storage-service" }
 vm-genesis = { path = "../../aptos-move/vm-genesis" }

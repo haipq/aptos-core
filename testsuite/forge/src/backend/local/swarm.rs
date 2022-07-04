@@ -6,11 +6,14 @@ use crate::{
     Validator, Version,
 };
 use anyhow::{anyhow, bail, Result};
-use aptos_config::config::NodeConfig;
-use aptos_genesis_tool::{fullnode_builder::FullnodeConfig, validator_builder::ValidatorBuilder};
-use aptos_sdk::types::{
-    chain_id::ChainId, transaction::Transaction, waypoint::Waypoint, AccountKey, LocalAccount,
-    PeerId,
+use aptos_config::{config::NodeConfig, keys::ConfigKey};
+use aptos_genesis::builder::FullnodeNodeConfig;
+use aptos_sdk::{
+    crypto::ed25519::Ed25519PrivateKey,
+    types::{
+        chain_id::ChainId, transaction::Transaction, waypoint::Waypoint, AccountKey, LocalAccount,
+        PeerId,
+    },
 };
 use std::{
     collections::HashMap,
@@ -140,18 +143,19 @@ impl LocalSwarmBuilder {
         // which cause flakiness in tests.
         if self.number_of_validators.get() == 1 {
             // this delays empty block by (30-1) * 30ms
-            self.template.consensus.mempool_poll_count = 30;
+            self.template.consensus.quorum_store_poll_count = 30;
         }
 
-        let (root_keys, genesis, genesis_waypoint, validators) = ValidatorBuilder::new(
-            &dir,
-            self.genesis_modules
-                .unwrap_or_else(|| cached_framework_packages::module_blobs().to_vec()),
-        )
-        .num_validators(self.number_of_validators)
-        .template(self.template)
-        .min_price_per_gas_unit(self.min_price_per_gas_unit)
-        .build(rng)?;
+        let (root_key, genesis, genesis_waypoint, validators) =
+            aptos_genesis::builder::Builder::new(
+                &dir,
+                self.genesis_modules
+                    .unwrap_or_else(|| cached_framework_packages::module_blobs().to_vec()),
+            )?
+            .with_num_validators(self.number_of_validators)
+            .with_template(self.template)
+            .with_min_price_per_gas_unit(self.min_price_per_gas_unit)
+            .build(rng)?;
 
         // Get the initial version to start the nodes with, either the one provided or fallback to
         // using the the latest version
@@ -169,14 +173,14 @@ impl LocalSwarmBuilder {
         let validators = validators
             .into_iter()
             .map(|v| {
-                let node = LocalNode::new(version.to_owned(), v.name, v.directory)?;
+                let node = LocalNode::new(version.to_owned(), v.name, v.dir)?;
                 Ok((node.peer_id(), node))
             })
             .collect::<Result<HashMap<_, _>>>()?;
-
+        let root_key = ConfigKey::new(root_key);
         let root_account = LocalAccount::new(
             aptos_sdk::types::account_config::aptos_root_address(),
-            AccountKey::from_private_key(root_keys.root_key),
+            AccountKey::from_private_key(root_key.private_key()),
             0,
         );
 
@@ -190,6 +194,7 @@ impl LocalSwarmBuilder {
             dir,
             root_account,
             chain_id: ChainId::test(),
+            root_key,
         })
     }
 }
@@ -205,6 +210,7 @@ pub struct LocalSwarm {
     dir: SwarmDirectory,
     root_account: LocalAccount,
     chain_id: ChainId,
+    root_key: ConfigKey<Ed25519PrivateKey>,
 }
 
 impl LocalSwarm {
@@ -241,10 +247,18 @@ impl LocalSwarm {
                     Ok(()) => *done = true,
 
                     Err(HealthCheckError::Unknown(e)) => {
-                        return Err(anyhow!("Node '{}' is not running: {}", node.name(), e));
+                        return Err(anyhow!(
+                            "Node '{}' is not running! Error: {}",
+                            node.name(),
+                            e
+                        ));
                     }
-                    Err(HealthCheckError::NotRunning) => {
-                        return Err(anyhow!("Node '{}' is not running", node.name()));
+                    Err(HealthCheckError::NotRunning(error)) => {
+                        return Err(anyhow!(
+                            "Node '{}' is not running! Error: {:?}",
+                            node.name(),
+                            error
+                        ));
                     }
                     Err(HealthCheckError::Failure(e)) => {
                         println!("health check failure: {}", e);
@@ -282,7 +296,7 @@ impl LocalSwarm {
         let mut validator_config = validator.config().clone();
         let name = self.node_name_counter.to_string();
         self.node_name_counter += 1;
-        let fullnode_config = FullnodeConfig::validator_fullnode(
+        let fullnode_config = FullnodeNodeConfig::validator_fullnode(
             name,
             self.dir.as_ref(),
             template,
@@ -300,7 +314,7 @@ impl LocalSwarm {
         let mut fullnode = LocalNode::new(
             version.to_owned(),
             fullnode_config.name,
-            fullnode_config.directory,
+            fullnode_config.dir,
         )?;
 
         let peer_id = fullnode.peer_id();
@@ -315,7 +329,7 @@ impl LocalSwarm {
     fn add_fullnode(&mut self, version: &Version, template: NodeConfig) -> Result<PeerId> {
         let name = self.node_name_counter.to_string();
         self.node_name_counter += 1;
-        let fullnode_config = FullnodeConfig::public_fullnode(
+        let fullnode_config = FullnodeNodeConfig::public_fullnode(
             name,
             self.dir.as_ref(),
             template,
@@ -327,7 +341,7 @@ impl LocalSwarm {
         let mut fullnode = LocalNode::new(
             version.to_owned(),
             fullnode_config.name,
-            fullnode_config.directory,
+            fullnode_config.dir,
         )?;
 
         let peer_id = fullnode.peer_id();
@@ -336,6 +350,10 @@ impl LocalSwarm {
         self.fullnodes.insert(peer_id, fullnode);
 
         Ok(peer_id)
+    }
+
+    pub fn root_key(&self) -> Ed25519PrivateKey {
+        self.root_key.private_key()
     }
 
     pub fn chain_id(&self) -> ChainId {

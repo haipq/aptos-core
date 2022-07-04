@@ -27,7 +27,6 @@ use consensus_types::{
     block::Block,
     common::{Payload, Round},
     quorum_cert::QuorumCert,
-    timeout::Timeout,
     timeout_2chain::{TwoChainTimeout, TwoChainTimeoutCertificate},
     vote::Vote,
     vote_data::VoteData,
@@ -69,6 +68,7 @@ pub fn make_proposal_with_qc_and_proof(
             qc.certified_block().timestamp_usecs() + 1,
             qc,
             validator_signer,
+            Vec::new(),
         ),
         None,
         false,
@@ -86,7 +86,14 @@ pub fn make_proposal_with_qc(
     validator_signer: &ValidatorSigner,
     exec_key: Option<&Ed25519PrivateKey>,
 ) -> MaybeSignedVoteProposal {
-    make_proposal_with_qc_and_proof(vec![], round, empty_proof(), qc, validator_signer, exec_key)
+    make_proposal_with_qc_and_proof(
+        Payload::new_empty(),
+        round,
+        empty_proof(),
+        qc,
+        validator_signer,
+        exec_key,
+    )
 }
 
 pub fn make_proposal_with_parent_and_overrides(
@@ -118,7 +125,7 @@ pub fn make_proposal_with_parent_and_overrides(
     let proof = Proof::new(
         parent_output.frozen_subtree_roots().clone(),
         parent_output.num_leaves(),
-        vec![Timeout::new(0, round).hash()],
+        vec![],
     );
 
     let proposed_block = BlockInfo::new(

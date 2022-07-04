@@ -24,6 +24,8 @@ class SendEmailJob < ApplicationJob
 
   # https://mailchimp.com/developer/transactional/api/messages/send-using-message-template/
   def send_email
+    return if Rails.env.test?
+
     client = MailchimpTransactional::Client.new(ENV.fetch('MAILCHIMP_API_KEY', nil))
     body = email_body
     sentry_scope.set_context(:email_body, body)
@@ -31,7 +33,7 @@ class SendEmailJob < ApplicationJob
     handle_results(results)
   rescue StandardError => e
     Sentry.capture_exception(e)
-    puts "Error: #{e}"
+    raise SendEmailJobError
   end
 
   def email_body

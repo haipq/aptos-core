@@ -13,6 +13,7 @@ use std::sync::Arc;
 
 use aptos_indexer::{
     database::new_db_pool, default_processor::DefaultTransactionProcessor, indexer::tailer::Tailer,
+    token_processor::TokenTransactionProcessor,
 };
 
 #[derive(Debug, Parser)]
@@ -52,6 +53,11 @@ struct IndexerArgs {
     /// Set to 0 to disable.
     #[clap(long, default_value_t = 1000)]
     emit_every: usize,
+
+    /// Turn on the indexer to collect token, ownership, collection and metadata and store them
+    /// in the postgres DB tables.
+    #[clap(long)]
+    index_token_data: bool,
 }
 
 #[tokio::main]
@@ -70,8 +76,12 @@ async fn main() -> std::io::Result<()> {
         tailer.run_migrations();
     }
 
-    let pg_transaction_processor = DefaultTransactionProcessor::new(conn_pool);
+    let pg_transaction_processor = DefaultTransactionProcessor::new(conn_pool.clone());
     tailer.add_processor(Arc::new(pg_transaction_processor));
+    if args.index_token_data {
+        let token_transaction_processor = TokenTransactionProcessor::new(conn_pool.clone());
+        tailer.add_processor(Arc::new(token_transaction_processor));
+    }
 
     let starting_version = match args.start_from_version {
         None => tailer.set_fetcher_to_lowest_processor_version().await,

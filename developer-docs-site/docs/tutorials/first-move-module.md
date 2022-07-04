@@ -1,5 +1,5 @@
 ---
-title: "Your first Move Module"
+title: "Your First Move Module"
 slug: "your-first-move-module"
 sidebar_position: 2
 ---
@@ -7,7 +7,7 @@ sidebar_position: 2
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-# Your first Move Module
+# Your First Move Module
 
 This tutorial details how to write, compile, test, publish and interact with Move Modules on the Aptos Blockchain. The steps are:
 
@@ -156,7 +156,7 @@ Now we return to our application to deploy and interact with the module on the A
 
 ### Step 2.2) Reading a resource
 
-The module is published at an address. This is the `contract_address` below. This is similar to the previous example, where the `TestCoin` is at `0x1`. The `contract_address` will be the same as the account that publishes it.
+The module is published at an address. This is the `contract_address` below. This is similar to the previous example, where the `Coin` is at `0x1`. The `contract_address` will be the same as the account that publishes it.
 
 <Tabs>
   <TabItem value="python" label="Python" default>
@@ -284,7 +284,7 @@ The data can be verified by visiting either a REST interface or the explorer:
 * Alice's account via the [REST interface][alice_account_rest]
 * Bob's account on the [explorer][bob_account_explorer]
 
-[account_basics]: /basics/basics-accounts
-[alice_account_rest]: https://fullnode.devnet.aptoslabs.com/accounts/a52671f10dc3479b09d0a11ce47694c0/
+[account_basics]: /concepts/basics-accounts
+[alice_account_rest]: /rest-api/#tag/accounts/a52671f10dc3479b09d0a11ce47694c0/
 [bob_account_explorer]: https://explorer.devnet.aptos.dev/account/ec6ec14e4abe10aaa6ad53b0b63a1806
-[rest_spec]: https://fullnode.devnet.aptoslabs.com/spec.html
+[rest_spec]: /rest-api

@@ -5,11 +5,18 @@ use crate::{
     aptosnet::logging::{LogEntry, LogEvent, LogSchema},
     AdvertisedData, GlobalDataSummary, OptimalChunkSizes, ResponseError,
 };
-use aptos_config::{config::StorageServiceConfig, network_id::PeerNetworkId};
-use aptos_logger::debug;
+use aptos_config::{
+    config::{BaseConfig, StorageServiceConfig},
+    network_id::{NetworkId, PeerNetworkId},
+};
+use aptos_logger::prelude::*;
+use itertools::Itertools;
+use netcore::transport::ConnectionOrigin;
+use network::application::storage::PeerMetadataStorage;
 use std::{
     cmp::min,
     collections::{HashMap, HashSet},
+    sync::Arc,
 };
 use storage_service_types::{StorageServerSummary, StorageServiceRequest};
 
@@ -99,19 +106,27 @@ impl PeerState {
 // TODO(philiphayes): this map needs to be garbage collected
 #[derive(Debug)]
 pub(crate) struct PeerStates {
-    config: StorageServiceConfig,
+    base_config: BaseConfig,
+    storage_service_config: StorageServiceConfig,
     peer_to_state: HashMap<PeerNetworkId, PeerState>,
     in_flight_priority_polls: HashSet<PeerNetworkId>, // The priority peers with in-flight polls
     in_flight_regular_polls: HashSet<PeerNetworkId>,  // The regular peers with in-flight polls
+    peer_metadata_storage: Arc<PeerMetadataStorage>,
 }
 
 impl PeerStates {
-    pub fn new(config: StorageServiceConfig) -> Self {
+    pub fn new(
+        base_config: BaseConfig,
+        storage_service_config: StorageServiceConfig,
+        peer_metadata_storage: Arc<PeerMetadataStorage>,
+    ) -> Self {
         Self {
-            config,
+            base_config,
+            storage_service_config,
             peer_to_state: HashMap::new(),
             in_flight_priority_polls: HashSet::new(),
             in_flight_regular_polls: HashSet::new(),
+            peer_metadata_storage,
         }
     }
 
@@ -125,7 +140,12 @@ impl PeerStates {
         // Storage services can always respond to data advertisement requests.
         // We need this outer check, since we need to be able to send data summary
         // requests to new peers (who don't have a peer state yet).
-        if request.is_get_storage_server_summary() {
+        // Likewise, we can always send subscription requests to any peers and
+        // all peers should support versioning.
+        if request.is_get_storage_server_summary()
+            || request.is_data_subscription_request()
+            || matches!(request, StorageServiceRequest::GetServerProtocolVersion)
+        {
             return true;
         }
 
@@ -145,7 +165,7 @@ impl PeerStates {
             .update_score_success();
         let new_score = self.peer_to_state.entry(peer).or_default().score;
         if old_score <= IGNORE_PEER_THRESHOLD && new_score > IGNORE_PEER_THRESHOLD {
-            debug!(
+            info!(
                 (LogSchema::new(LogEntry::PeerStates)
                     .event(LogEvent::PeerNoLongerIgnored)
                     .message("Peer will no longer be ignored")
@@ -163,7 +183,7 @@ impl PeerStates {
             .update_score_error(error);
         let new_score = self.peer_to_state.entry(peer).or_default().score;
         if old_score > IGNORE_PEER_THRESHOLD && new_score <= IGNORE_PEER_THRESHOLD {
-            debug!(
+            info!(
                 (LogSchema::new(LogEntry::PeerStates)
                     .event(LogEvent::PeerIgnored)
                     .message("Peer will be ignored")
@@ -184,36 +204,76 @@ impl PeerStates {
 
     /// Returns true iff there is an existing in-flight request
     pub fn existing_in_flight_request(&self, peer: &PeerNetworkId) -> bool {
-        if self.is_priority_peer(peer) {
-            self.in_flight_priority_polls.contains(peer)
-        } else {
-            self.in_flight_regular_polls.contains(peer)
-        }
+        self.in_flight_priority_polls.contains(peer) || self.in_flight_regular_polls.contains(peer)
     }
 
-    /// Creates a new pending in-flight request for the specified peer
+    /// Marks an in-flight request as started for the specified peer
     pub fn new_in_flight_request(&mut self, peer: &PeerNetworkId) {
-        if self.is_priority_peer(peer) {
-            let _ = self.in_flight_priority_polls.insert(*peer);
+        // Get the current in-flight polls
+        let is_priority_peer = self.is_priority_peer(peer);
+        let in_flight_polls = if is_priority_peer {
+            &mut self.in_flight_priority_polls
         } else {
-            let _ = self.in_flight_regular_polls.insert(*peer);
+            &mut self.in_flight_regular_polls
         };
+
+        // Insert the new peer
+        if !in_flight_polls.insert(*peer) {
+            error!(
+                (LogSchema::new(LogEntry::PeerStates)
+                    .event(LogEvent::PriorityAndRegularPeers)
+                    .message(&format!(
+                        "Peer already found with an in-flight poll! Priority: {:?}",
+                        is_priority_peer
+                    ))
+                    .peer(peer))
+            );
+        }
     }
 
     /// Marks the pending in-flight request as complete for the specified peer
     pub fn mark_in_flight_request_complete(&mut self, peer: &PeerNetworkId) {
-        if self.is_priority_peer(peer) {
-            let _ = self.in_flight_priority_polls.remove(peer);
-        } else {
-            let _ = self.in_flight_regular_polls.remove(peer);
-        };
+        // The priority of the peer might have changed since we
+        // last polled it, so we attempt to remove it from both
+        // the regular and priority in-flight requests.
+        if !self.in_flight_priority_polls.remove(peer) && !self.in_flight_regular_polls.remove(peer)
+        {
+            error!(
+                (LogSchema::new(LogEntry::PeerStates)
+                    .event(LogEvent::PriorityAndRegularPeers)
+                    .message("Peer not found with an in-flight poll!")
+                    .peer(peer))
+            );
+        }
     }
 
     /// Returns true iff the given peer is high-priority.
     ///
     /// TODO(joshlind): make this less hacky using network topological awareness.
     pub fn is_priority_peer(&self, peer: &PeerNetworkId) -> bool {
-        peer.network_id().is_validator_network()
+        // Validators should only prioritize other validators
+        let peer_network_id = peer.network_id();
+        if self.base_config.role.is_validator() {
+            return peer_network_id.is_validator_network();
+        }
+
+        // VFNs should only prioritize validators
+        if self
+            .peer_metadata_storage
+            .networks()
+            .contains(&NetworkId::Vfn)
+        {
+            return peer_network_id.is_vfn_network();
+        }
+
+        // PFNs should only prioritize outbound connections (this targets seed peers and VFNs)
+        if let Some(peer_info) = self.peer_metadata_storage.read(*peer) {
+            if peer_info.active_connection.origin == ConnectionOrigin::Outbound {
+                return true;
+            }
+        }
+
+        false
     }
 
     /// Updates the storage summary for the given peer
@@ -226,19 +286,25 @@ impl PeerStates {
 
     /// Calculates a global data summary using all known storage summaries
     pub fn calculate_aggregate_summary(&self) -> GlobalDataSummary {
+        // Only include likely-not-malicious peers in the data summary aggregation
+        let summaries: Vec<StorageServerSummary> = self
+            .peer_to_state
+            .values()
+            .filter_map(PeerState::storage_summary_if_not_ignored)
+            .cloned()
+            .collect();
+
+        // If we have no peers, return an empty global summary
+        if summaries.is_empty() {
+            return GlobalDataSummary::empty();
+        }
+
+        // Calculate the global data summary using the advertised peer data
         let mut advertised_data = AdvertisedData::empty();
         let mut max_epoch_chunk_sizes = vec![];
         let mut max_transaction_chunk_sizes = vec![];
         let mut max_transaction_output_chunk_sizes = vec![];
         let mut max_account_states_chunk_sizes = vec![];
-
-        // Only include likely-not-malicious peers in the data summary aggregation
-        let summaries = self
-            .peer_to_state
-            .values()
-            .filter_map(PeerState::storage_summary_if_not_ignored);
-
-        // Collect each peer's protocol and data advertisements
         for summary in summaries {
             // Collect aggregate data advertisements
             if let Some(account_states) = summary.data_summary.account_states {
@@ -275,7 +341,7 @@ impl PeerStates {
 
         // Calculate optimal chunk sizes based on the advertised data
         let optimal_chunk_sizes = calculate_optimal_chunk_sizes(
-            &self.config,
+            &self.storage_service_config,
             max_account_states_chunk_sizes,
             max_epoch_chunk_sizes,
             max_transaction_chunk_sizes,

@@ -9,11 +9,45 @@ use crate::{
 };
 use aptos_logger::info;
 use aptos_rest_client::Transaction;
+use serde_json::Value;
 use std::{fmt::Debug, sync::Arc};
 use tokio::{sync::Mutex, task::JoinHandle};
 use url::{ParseError, Url};
 
 diesel_migrations::embed_migrations!();
+
+pub fn string_null_byte_replacement(value: &mut str) -> String {
+    value.replace('\u{0000}', "").replace("\\u0000", "")
+}
+
+pub fn recurse_remove_null_bytes_from_json(sub_json: &mut Value) {
+    match sub_json {
+        Value::Array(array) => {
+            for item in array {
+                recurse_remove_null_bytes_from_json(item);
+            }
+        }
+        Value::Object(object) => {
+            for (_key, value) in object {
+                recurse_remove_null_bytes_from_json(value);
+            }
+        }
+        Value::String(str) => {
+            if !str.is_empty() {
+                let replacement = string_null_byte_replacement(str);
+                *str = replacement;
+            }
+        }
+        _ => {}
+    }
+}
+
+pub fn remove_null_bytes_from_txn(txn: Arc<Transaction>) -> Arc<Transaction> {
+    let mut txn_json = serde_json::to_value(txn).unwrap();
+    recurse_remove_null_bytes_from_json(&mut txn_json);
+    let txn: Transaction = serde_json::from_value::<Transaction>(txn_json).unwrap();
+    Arc::new(txn)
+}
 
 #[derive(Clone)]
 pub struct Tailer {
@@ -153,11 +187,14 @@ impl Tailer {
         txn: Arc<Transaction>,
     ) -> anyhow::Result<Vec<Result<ProcessingResult, TransactionProcessingError>>> {
         let mut tasks = vec![];
+        let txn = remove_null_bytes_from_txn(txn.clone());
         for processor in &self.processors {
-            let txn2 = txn.clone();
             let processor2 = processor.clone();
+            let txn2 = txn.clone();
             let task = tokio::task::spawn(async move {
-                processor2.process_transaction_with_status(txn2).await
+                processor2
+                    .process_transaction_with_status(txn2.clone())
+                    .await
             });
             tasks.push(task);
         }
@@ -199,12 +236,18 @@ mod test {
         database::{new_db_pool, PgPoolConnection},
         default_processor::DefaultTransactionProcessor,
         models::transactions::TransactionModel,
+        token_processor::TokenTransactionProcessor,
     };
     use diesel::Connection;
     use serde_json::json;
 
     pub fn wipe_database(conn: &PgPoolConnection) {
         for table in [
+            "metadatas",
+            "ownerships",
+            "token_activities",
+            "tokens",
+            "collections",
             "write_set_changes",
             "events",
             "user_transactions",
@@ -228,7 +271,9 @@ mod test {
         tailer.run_migrations();
 
         let pg_transaction_processor = DefaultTransactionProcessor::new(conn_pool.clone());
+        let token_transaction_processor = TokenTransactionProcessor::new(conn_pool.clone());
         tailer.add_processor(Arc::new(pg_transaction_processor));
+        tailer.add_processor(Arc::new(token_transaction_processor));
         Ok((conn_pool, tailer))
     }
 
@@ -462,6 +507,21 @@ mod test {
               ],
               "proposer": "0x68f04222bd9f8846cda028ea5ba3846a806b04a47e1f1a4f0939f350d713b2eb",
               "timestamp": "1649395495746947",
+              "events": [
+                 {
+                    "key": "0x0600000000000000000000000000000000000000000000000000000000000000000000000a550c18",
+                    "sequence_number": "0",
+                    "type": "0x1::Block::NewBlockEvent",
+                    "data": {
+                      "epoch": "1",
+                      "failed_proposer_indices": [],
+                      "previous_block_votes": [false],
+                      "proposer": "0xf7c109be515785bba951fc8c51063515d474f78cad150457d6ebd08c4faf2f3b",
+                      "round": "1",
+                      "time_microseconds": "1656565270489235"
+                    }
+                }
+              ],
               "changes": [
                 {
                   "type": "write_resource",
@@ -512,7 +572,7 @@ mod test {
         assert_eq!(tx1.type_, "block_metadata_transaction");
         assert!(ut1.is_none());
         assert!(bmt1.is_some());
-        assert_eq!(events1.len(), 0);
+        assert_eq!(events1.len(), 1);
         assert_eq!(wsc1.len(), 2);
 
         // This is the genesis transaction
@@ -641,5 +701,70 @@ mod test {
         // Fetch the latest status
         let latest_version = tailer.set_fetcher_to_lowest_processor_version().await;
         assert_eq!(latest_version, 691595);
+
+        // Message Transaction -> 0xb8bbd3936b05e3643f4b4f910bb00c9b6fa817c1935c74b9a16b5b7a2c8a69a3
+        let message_txn: Transaction = serde_json::from_value(json!(
+            {
+              "type": "user_transaction",
+              "version": "260885",
+              "hash": "0xb8bbd3936b05e3643f4b4f910bb00c9b6fa817c1935c74b9a16b5b7a2c8a69a3",
+              "state_root_hash": "0xde91b595abbeef217fb0be956df0909c1459ba8d82ed12b983e226ecbf0a4ec5",
+              "event_root_hash": "0x414343554d554c41544f525f504c414345484f4c4445525f4841534800000000",
+              "gas_used": "143",
+              "success": true,
+              "vm_status": "Executed successfully",
+              "accumulator_root_hash": "0xef40b1120b1873d2c3a4a91eafa4084e24ff1529a0f31959e88f6387054c8fe0",
+              "changes": [
+                {
+                  "type": "write_resource",
+                  "address": "0x2a0e66fde889cebf0401e676bb9bfa073e03caa9c009c66b739c30d24dccad81",
+                  "state_key_hash": "0xd210490c73366517a3976e1585086ec85e9f820194dd29872ad49bd87d46e66e",
+                  "data": {
+                    "type": "0x2a0e66fde889cebf0401e676bb9bfa073e03caa9c009c66b739c30d24dccad81::Message::MessageHolder",
+                    "data": {
+                      "message": "he\u{0}\u{0} \u{000} w\\0007 \\0 \\00 \u{0000} \\u0000 d!",
+                      "message_change_events": {
+                        "counter": "0",
+                        "guid": {
+                          "guid": {
+                            "id": {
+                              "addr": "0x2a0e66fde889cebf0401e676bb9bfa073e03caa9c009c66b739c30d24dccad81",
+                              "creation_num": "2"
+                            }
+                          },
+                          "len_bytes": 40
+                        }
+                      }
+                    }
+                  }
+                }
+              ],
+              "sender": "0x2a0e66fde889cebf0401e676bb9bfa073e03caa9c009c66b739c30d24dccad81",
+              "sequence_number": "6",
+              "max_gas_amount": "1000",
+              "gas_unit_price": "1",
+              "expiration_timestamp_secs": "1651789617",
+              "payload": {
+                "type": "script_function_payload",
+                "function": "0x2a0e66fde889cebf0401e676bb9bfa073e03caa9c009c66b739c30d24dccad81::Message::set_message",
+                "type_arguments": [],
+                "arguments": [
+                  "0x68650000207707206421"
+                ]
+              },
+              "signature": {
+                "type": "ed25519_signature",
+                "public_key": "0xe355b88fc001857a2cc9fe55007889cd1561aed56d187fe65729c50274c37398",
+                "signature": "0x9c1fef826ead87392f945bce527169b6627205a8d3bae77c5d8293c00b6e6a7657b4464b1fe2b36b89f5a2e64468ce7a04191d5fba431f1dc084f90292c9eb04"
+              },
+              "events": [],
+              "timestamp": "1651789018411640"
+            }
+        )).unwrap();
+
+        tailer
+            .process_transaction(Arc::new(message_txn.clone()))
+            .await
+            .unwrap();
     }
 }

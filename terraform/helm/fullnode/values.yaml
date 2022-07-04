@@ -5,8 +5,8 @@ chain:
 
 aptos_chains:
   devnet:
-    id: 10
-    waypoint: 0:bd64eed53bda4570f7d33a5c782de87f52d6a67f444135a4c950124081700efc
+    id: 18
+    waypoint: 0:a3033bb2b3cf6732783f179a3f466917aacd632206a2af629b1827fb68ed4529
 
 fullnode_identity:
   # Set this to start fullnode from an existing key.
@@ -18,7 +18,7 @@ enable_state_sync_v2: false
 rust_log: info
 
 image:
-  repo: aptoslab/validator
+  repo: aptoslabs/validator
   tag: devnet
   pullPolicy: IfNotPresent
 
@@ -59,7 +59,7 @@ logging:
 
 backup:
   image:
-    repo: aptoslab/tools
+    repo: aptoslabs/tools
     tag: devnet
     pullPolicy: IfNotPresent
   resources:
@@ -101,7 +101,7 @@ backup_verify:
 
 restore:
   image:
-    repo: aptoslab/tools
+    repo: aptoslabs/tools
     tag: devnet
     pullPolicy: IfNotPresent
   resources:

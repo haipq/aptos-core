@@ -21,6 +21,8 @@ class It1Profile < ApplicationRecord
   validates :validator_metrics_port, presence: true, numericality: { only_integer: true }
 
   validates :fullnode_port, numericality: { only_integer: true }, allow_nil: true
+  validates :fullnode_network_key, uniqueness: true, format: { with: /\A0x[a-f0-9]{64}\z/i }, allow_nil: true,
+                                   allow_blank: true
 
   validates :terms_accepted, acceptance: true
 
@@ -30,6 +32,10 @@ class It1Profile < ApplicationRecord
 
   CHANGES_TO_REVALIDATE = Set.new %w[consensus_key account_key network_key validator_address validator_api_port
                                      validator_metrics_port]
+
+  def account_address
+    self.class.address_from_key account_key
+  end
 
   def validator_port
     self[:validator_port] || 6180

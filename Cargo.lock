@@ -22,14 +22,14 @@ dependencies = [
  "aptos-workspace-hack",
  "mirai-annotations",
  "proptest",
- "rand 0.8.4",
+ "rand 0.7.3",
 ]
 
 [[package]]
 name = "addr2line"
-version = "0.14.1"
+version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a55f82cfe485775d02112886f4169bde0c5894d75e79ead7eafe7e40a25e45f7"
+checksum = "b9ecd88a8c8378ca913a680cd98f0f13ac67383d35993f86c90a70e3f137816b"
 dependencies = [
  "gimli",
 ]
@@ -84,7 +84,7 @@ dependencies = [
  "aptos-workspace-hack",
  "bcs",
  "cached-framework-packages",
- "clap 3.1.17",
+ "clap 3.1.18",
  "datatest-stable",
  "move-deps",
 ]
@@ -129,14 +129,15 @@ dependencies = [
 
 [[package]]
 name = "aptos"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "aptos-config",
  "aptos-crypto",
+ "aptos-genesis",
  "aptos-github-client",
+ "aptos-keygen",
  "aptos-logger",
- "aptos-management",
  "aptos-rest-client",
  "aptos-sdk",
  "aptos-secure-storage",
@@ -151,13 +152,14 @@ dependencies = [
  "base64",
  "bcs",
  "cached-framework-packages",
- "clap 3.1.17",
+ "clap 3.1.18",
  "executor",
  "framework",
  "hex",
  "itertools",
  "move-deps",
- "rand 0.8.4",
+ "parse_duration",
+ "rand 0.7.3",
  "reqwest",
  "serde 1.0.137",
  "serde_json",
@@ -168,7 +170,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
- "tokio-util 0.6.9",
+ "tokio-util 0.7.2",
  "toml",
  "uuid",
  "vm-genesis",
@@ -182,11 +184,12 @@ dependencies = [
  "aptos-api-types",
  "aptos-config",
  "aptos-crypto",
- "aptos-genesis-tool",
+ "aptos-genesis",
  "aptos-global-constants",
  "aptos-logger",
  "aptos-mempool",
- "aptos-metrics",
+ "aptos-metrics-core",
+ "aptos-proptest-helpers",
  "aptos-sdk",
  "aptos-secure-storage",
  "aptos-state-view",
@@ -209,7 +212,8 @@ dependencies = [
  "move-deps",
  "once_cell",
  "percent-encoding",
- "rand 0.8.4",
+ "proptest",
+ "rand 0.7.3",
  "regex",
  "reqwest",
  "serde 1.0.137",
@@ -267,7 +271,7 @@ dependencies = [
  "bcs",
  "get_if_addrs",
  "mirai-annotations",
- "rand 0.8.4",
+ "rand 0.7.3",
  "serde 1.0.137",
  "serde_yaml",
  "short-hex-str",
@@ -278,12 +282,12 @@ dependencies = [
 name = "aptos-crypto"
 version = "0.0.3"
 dependencies = [
- "aes-gcm",
  "anyhow",
  "aptos-crypto-derive",
  "aptos-workspace-hack",
  "bcs",
  "bitvec",
+ "blst",
  "byteorder",
  "bytes",
  "criterion",
@@ -291,19 +295,20 @@ dependencies = [
  "digest 0.9.0",
  "ed25519-dalek",
  "hex",
- "hkdf",
+ "hkdf 0.10.0",
  "mirai-annotations",
  "once_cell",
  "proptest",
  "proptest-derive",
- "rand 0.8.4",
- "rand_core 0.6.3",
+ "rand 0.7.3",
+ "rand_core 0.5.1",
+ "ring",
  "ripemd160",
  "serde 1.0.137",
  "serde-name",
  "serde_bytes",
  "serde_json",
- "sha2",
+ "sha2 0.9.9",
  "sha3",
  "static_assertions",
  "thiserror",
@@ -318,9 +323,9 @@ version = "0.0.3"
 dependencies = [
  "anyhow",
  "aptos-workspace-hack",
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
- "syn 1.0.92",
+ "syn 1.0.95",
 ]
 
 [[package]]
@@ -332,7 +337,7 @@ dependencies = [
  "aptos-id-generator",
  "aptos-infallible",
  "aptos-logger",
- "aptos-metrics",
+ "aptos-metrics-core",
  "aptos-time-service",
  "aptos-types",
  "aptos-workspace-hack",
@@ -343,9 +348,11 @@ dependencies = [
  "futures",
  "itertools",
  "maplit",
+ "netcore",
  "network",
- "rand 0.8.4",
+ "rand 0.7.3",
  "serde 1.0.137",
+ "short-hex-str",
  "storage-service-client",
  "storage-service-server",
  "storage-service-types",
@@ -362,6 +369,7 @@ dependencies = [
  "aptos-config",
  "aptos-crypto",
  "aptos-infallible",
+ "aptos-keygen",
  "aptos-logger",
  "aptos-rest-client",
  "aptos-sdk",
@@ -370,11 +378,41 @@ dependencies = [
  "bytes",
  "futures",
  "hex",
- "rand 0.8.4",
+ "rand 0.7.3",
  "reqwest",
  "serde 1.0.137",
  "serde_json",
  "structopt",
+ "tempfile",
+ "tokio",
+ "url",
+ "warp",
+]
+
+[[package]]
+name = "aptos-faucet-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aptos",
+ "aptos-config",
+ "aptos-crypto",
+ "aptos-faucet",
+ "aptos-infallible",
+ "aptos-logger",
+ "aptos-rest-client",
+ "aptos-sdk",
+ "aptos-workspace-hack",
+ "bcs",
+ "bytes",
+ "clap 3.1.18",
+ "futures",
+ "hex",
+ "rand 0.7.3",
+ "reqwest",
+ "serde 1.0.137",
+ "serde_json",
+ "serde_yaml",
  "tempfile",
  "tokio",
  "url",
@@ -419,7 +457,7 @@ dependencies = [
  "once_cell",
  "proptest",
  "proptest-derive",
- "rand 0.8.4",
+ "rand 0.7.3",
  "rusty-fork",
  "safety-rules",
  "scratchpad",
@@ -428,6 +466,36 @@ dependencies = [
  "stats_alloc",
  "storage-interface",
  "structopt",
+]
+
+[[package]]
+name = "aptos-genesis"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aptos-config",
+ "aptos-crypto",
+ "aptos-global-constants",
+ "aptos-keygen",
+ "aptos-management",
+ "aptos-secure-storage",
+ "aptos-state-view",
+ "aptos-temppath",
+ "aptos-types",
+ "aptos-vm",
+ "aptos-workspace-hack",
+ "aptosdb",
+ "bcs",
+ "cached-framework-packages",
+ "consensus-types",
+ "executor",
+ "rand 0.7.3",
+ "serde 1.0.137",
+ "serde_yaml",
+ "storage-interface",
+ "structopt",
+ "toml",
+ "vm-genesis",
 ]
 
 [[package]]
@@ -450,7 +518,7 @@ dependencies = [
  "cached-framework-packages",
  "consensus-types",
  "executor",
- "rand 0.8.4",
+ "rand 0.7.3",
  "serde 1.0.137",
  "storage-interface",
  "structopt",
@@ -488,16 +556,19 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "aptos-logger",
- "aptos-metrics",
+ "aptos-metrics-core",
  "aptos-rest-client",
  "aptos-workspace-hack",
  "async-trait",
  "chrono",
- "clap 3.1.17",
+ "clap 3.1.18",
  "diesel",
  "diesel_migrations",
  "futures",
  "once_cell",
+ "reqwest",
+ "reqwest-middleware",
+ "reqwest-retry",
  "serde 1.0.137",
  "serde_json",
  "tokio",
@@ -519,9 +590,10 @@ dependencies = [
  "aptos-crypto",
  "aptos-crypto-derive",
  "aptos-infallible",
- "aptos-metrics",
+ "aptos-metrics-core",
  "aptos-types",
  "aptos-workspace-hack",
+ "aptosdb",
  "bcs",
  "byteorder",
  "itertools",
@@ -531,7 +603,8 @@ dependencies = [
  "once_cell",
  "proptest",
  "proptest-derive",
- "rand 0.8.4",
+ "rand 0.7.3",
+ "rayon",
  "serde 1.0.137",
  "storage-interface",
  "thiserror",
@@ -545,7 +618,7 @@ dependencies = [
  "aptos-types",
  "aptos-workspace-hack",
  "hex",
- "rand 0.8.4",
+ "rand 0.7.3",
 ]
 
 [[package]]
@@ -553,9 +626,9 @@ name = "aptos-log-derive"
 version = "0.1.0"
 dependencies = [
  "aptos-workspace-hack",
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
- "syn 1.0.92",
+ "syn 1.0.95",
 ]
 
 [[package]]
@@ -609,7 +682,7 @@ dependencies = [
  "aptos-id-generator",
  "aptos-infallible",
  "aptos-logger",
- "aptos-metrics",
+ "aptos-metrics-core",
  "aptos-proptest-helpers",
  "aptos-types",
  "aptos-workspace-hack",
@@ -617,6 +690,7 @@ dependencies = [
  "bcs",
  "bounded-executor",
  "channel",
+ "consensus-types",
  "enum_dispatch",
  "event-notifications",
  "fail 0.5.0",
@@ -628,13 +702,12 @@ dependencies = [
  "network",
  "once_cell",
  "proptest",
- "rand 0.8.4",
+ "rand 0.7.3",
  "rayon",
  "serde 1.0.137",
  "serde_json",
  "short-hex-str",
  "storage-interface",
- "storage-service",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -647,6 +720,7 @@ version = "0.1.0"
 dependencies = [
  "aptos-logger",
  "aptos-metrics-core",
+ "aptos-telemetry",
  "aptos-workspace-hack",
  "assert_approx_eq",
  "futures",
@@ -675,7 +749,7 @@ dependencies = [
  "aptos-config",
  "aptos-crypto",
  "aptos-data-client",
- "aptos-genesis-tool",
+ "aptos-genesis",
  "aptos-infallible",
  "aptos-logger",
  "aptos-mempool",
@@ -708,17 +782,47 @@ dependencies = [
  "mempool-notifications",
  "network",
  "network-builder",
- "rand 0.8.4",
+ "rand 0.7.3",
  "state-sync-multiplexer",
  "state-sync-v1",
- "storage-client",
  "storage-interface",
- "storage-service",
  "storage-service-client",
  "storage-service-server",
  "structopt",
  "tokio",
  "tokio-stream",
+]
+
+[[package]]
+name = "aptos-node-checker"
+version = "0.1.1"
+dependencies = [
+ "anyhow",
+ "aptos-api",
+ "aptos-config",
+ "aptos-crypto",
+ "aptos-logger",
+ "aptos-metrics",
+ "aptos-rest-client",
+ "aptos-sdk",
+ "aptos-workspace-hack",
+ "async-trait",
+ "clap 3.1.18",
+ "env_logger 0.8.4",
+ "futures",
+ "log",
+ "once_cell",
+ "poem",
+ "poem-openapi",
+ "prometheus-parse",
+ "reqwest",
+ "serde 1.0.137",
+ "serde_json",
+ "serde_yaml",
+ "thiserror",
+ "tokio",
+ "transaction-emitter-lib",
+ "url",
 ]
 
 [[package]]
@@ -739,21 +843,20 @@ dependencies = [
  "aptos-workspace-hack",
  "base64",
  "bcs",
- "fallible",
  "futures",
  "hex",
  "itertools",
  "move-deps",
  "netcore",
  "network",
- "rand 0.8.4",
+ "rand 0.7.3",
  "serde 1.0.137",
  "serde_json",
  "serde_yaml",
  "structopt",
  "thiserror",
  "tokio",
- "tokio-util 0.6.9",
+ "tokio-util 0.7.2",
  "toml",
  "url",
 ]
@@ -762,7 +865,6 @@ dependencies = [
 name = "aptos-parallel-executor"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "aptos-infallible",
  "aptos-workspace-hack",
  "arc-swap",
@@ -774,7 +876,7 @@ dependencies = [
  "once_cell",
  "proptest",
  "proptest-derive",
- "rand 0.8.4",
+ "rand 0.7.3",
  "rayon",
 ]
 
@@ -794,12 +896,12 @@ version = "0.1.0"
 dependencies = [
  "aptos-infallible",
  "aptos-logger",
- "aptos-metrics",
+ "aptos-metrics-core",
  "aptos-workspace-hack",
  "futures",
  "pin-project",
  "tokio",
- "tokio-util 0.6.9",
+ "tokio-util 0.7.2",
 ]
 
 [[package]]
@@ -843,6 +945,65 @@ dependencies = [
 ]
 
 [[package]]
+name = "aptos-rosetta"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "aptos-api",
+ "aptos-config",
+ "aptos-crypto",
+ "aptos-logger",
+ "aptos-metrics-core",
+ "aptos-rest-client",
+ "aptos-types",
+ "aptos-workspace-hack",
+ "async-trait",
+ "bcs",
+ "clap 3.1.18",
+ "framework",
+ "futures",
+ "hex",
+ "move-deps",
+ "reqwest",
+ "serde 1.0.137",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "url",
+ "warp",
+]
+
+[[package]]
+name = "aptos-rosetta-cli"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "aptos-api",
+ "aptos-config",
+ "aptos-crypto",
+ "aptos-logger",
+ "aptos-metrics-core",
+ "aptos-rest-client",
+ "aptos-rosetta",
+ "aptos-types",
+ "aptos-workspace-hack",
+ "async-trait",
+ "bcs",
+ "clap 3.1.18",
+ "framework",
+ "futures",
+ "hex",
+ "move-deps",
+ "reqwest",
+ "serde 1.0.137",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "url",
+ "warp",
+]
+
+[[package]]
 name = "aptos-sdk"
 version = "0.0.3"
 dependencies = [
@@ -852,7 +1013,7 @@ dependencies = [
  "aptos-workspace-hack",
  "bcs",
  "move-deps",
- "rand_core 0.6.3",
+ "rand_core 0.5.1",
  "serde 1.0.137",
 ]
 
@@ -896,7 +1057,7 @@ dependencies = [
  "bcs",
  "chrono",
  "enum_dispatch",
- "rand 0.8.4",
+ "rand 0.7.3",
  "serde 1.0.137",
  "serde_json",
  "thiserror",
@@ -911,7 +1072,7 @@ dependencies = [
  "aptos-types",
  "aptos-workspace-hack",
  "bcs",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=1b6b7513dcc1a5c866f178ca5c1e74beb2ce181e)",
+ "move-core-types",
  "serde 1.0.137",
  "serde_bytes",
  "serde_json",
@@ -921,15 +1082,30 @@ dependencies = [
 name = "aptos-telemetry"
 version = "0.1.0"
 dependencies = [
+ "aptos-api",
+ "aptos-config",
+ "aptos-infallible",
  "aptos-logger",
- "aptos-metrics",
+ "aptos-mempool",
+ "aptos-metrics-core",
  "aptos-workspace-hack",
+ "aptosdb",
+ "consensus",
+ "futures",
+ "network",
  "once_cell",
+ "prometheus",
+ "rand 0.7.3",
+ "rand_core 0.5.1",
  "reqwest",
  "serde 1.0.137",
  "serde_json",
+ "shadow-rs",
+ "state-sync-driver",
+ "state-sync-v1",
  "sysinfo",
  "tokio",
+ "tokio-stream",
  "uuid",
 ]
 
@@ -939,7 +1115,7 @@ version = "0.1.0"
 dependencies = [
  "aptos-workspace-hack",
  "hex",
- "rand 0.8.4",
+ "rand 0.7.3",
 ]
 
 [[package]]
@@ -999,7 +1175,6 @@ dependencies = [
  "aptos-workspace-hack",
  "aptosdb",
  "bcs",
- "cached-framework-packages",
  "difference",
  "framework",
  "hex",
@@ -1028,11 +1203,12 @@ dependencies = [
  "once_cell",
  "proptest",
  "proptest-derive",
- "rand 0.8.4",
+ "rand 0.7.3",
  "regex",
  "serde 1.0.137",
  "serde_bytes",
  "serde_json",
+ "serde_yaml",
  "thiserror",
  "tiny-keccak",
 ]
@@ -1078,7 +1254,7 @@ dependencies = [
  "aptos-crypto",
  "aptos-crypto-derive",
  "aptos-logger",
- "aptos-metrics",
+ "aptos-metrics-core",
  "aptos-parallel-executor",
  "aptos-state-view",
  "aptos-types",
@@ -1109,6 +1285,7 @@ dependencies = [
  "cc",
  "chrono",
  "clap 2.34.0",
+ "clap 3.1.18",
  "crossbeam-channel",
  "crossbeam-deque",
  "crossbeam-queue",
@@ -1123,7 +1300,6 @@ dependencies = [
  "futures-sink",
  "futures-util",
  "generic-array 0.14.5",
- "getrandom 0.2.6",
  "hashbrown 0.11.2",
  "hyper",
  "include_dir 0.7.2",
@@ -1131,10 +1307,12 @@ dependencies = [
  "libc",
  "log",
  "memchr",
+ "num-bigint 0.2.6",
  "num-integer",
  "num-traits 0.2.15",
  "parking_lot 0.12.0",
- "rand 0.8.4",
+ "rand 0.7.3",
+ "rand 0.8.5",
  "regex",
  "regex-syntax",
  "reqwest",
@@ -1143,12 +1321,16 @@ dependencies = [
  "serde_json",
  "sha-1 0.10.0",
  "standback",
- "syn 1.0.92",
+ "subtle",
+ "syn 1.0.95",
+ "textwrap 0.15.0",
  "tokio",
- "tokio-util 0.6.9",
+ "tokio-util 0.6.10",
+ "tokio-util 0.7.2",
  "toml",
  "tracing",
  "tracing-core",
+ "url",
  "warp",
 ]
 
@@ -1185,7 +1367,7 @@ dependencies = [
  "aptos-infallible",
  "aptos-jellyfish-merkle",
  "aptos-logger",
- "aptos-metrics",
+ "aptos-metrics-core",
  "aptos-proptest-helpers",
  "aptos-temppath",
  "aptos-types",
@@ -1202,7 +1384,7 @@ dependencies = [
  "once_cell",
  "proptest",
  "proptest-derive",
- "rand 0.8.4",
+ "rand 0.7.3",
  "schemadb",
  "scratchpad",
  "serde 1.0.137",
@@ -1256,9 +1438,9 @@ version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "10f203db73a71dfa2fb6dd22763990fa26f3d2625a6da2da900d23b87d26be27"
 dependencies = [
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
- "syn 1.0.92",
+ "syn 1.0.95",
 ]
 
 [[package]]
@@ -1267,9 +1449,9 @@ version = "0.1.53"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed6aa3524a2dfcf9fe180c51eae2b58738348d819517ceadf95789c51fff7600"
 dependencies = [
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
- "syn 1.0.92",
+ "syn 1.0.95",
 ]
 
 [[package]]
@@ -1301,9 +1483,9 @@ checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
 
 [[package]]
 name = "backtrace"
-version = "0.3.58"
+version = "0.3.65"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88fb5a785d6b44fd9d6700935608639af1b8356de1e55d5f7c2740f4faa15d82"
+checksum = "11a17d453482a265fd5f8479f2a3f405566e6ca627837aaddb85af8b1ab8ef61"
 dependencies = [
  "addr2line",
  "cc",
@@ -1345,7 +1527,7 @@ dependencies = [
  "once_cell",
  "pin-project",
  "proptest",
- "rand 0.8.4",
+ "rand 0.7.3",
  "regex",
  "reqwest",
  "serde 1.0.137",
@@ -1354,7 +1536,7 @@ dependencies = [
  "structopt",
  "tokio",
  "tokio-stream",
- "tokio-util 0.6.9",
+ "tokio-util 0.7.2",
  "toml",
  "warp",
 ]
@@ -1367,7 +1549,7 @@ dependencies = [
  "aptos-config",
  "aptos-crypto",
  "aptos-logger",
- "aptos-metrics",
+ "aptos-metrics-core",
  "aptos-temppath",
  "aptos-types",
  "aptos-workspace-hack",
@@ -1420,9 +1602,9 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3deeecb812ca5300b7d3f66f730cc2ebd3511c3d36c691dd79c165d5b19a26e3"
 dependencies = [
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
- "syn 1.0.92",
+ "syn 1.0.95",
 ]
 
 [[package]]
@@ -1463,7 +1645,7 @@ dependencies = [
  "lazy_static 1.4.0",
  "lazycell",
  "peeking_take_while",
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
  "regex",
  "rustc-hash",
@@ -1559,6 +1741,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
 
 [[package]]
+name = "blst"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "acb8c0939e210397464ae1857265a7492a2957f915803d43cb9832229100636a"
+dependencies = [
+ "cc",
+ "glob",
+ "threadpool",
+ "zeroize",
+ "zeroize_derive",
+]
+
+[[package]]
 name = "bounded-executor"
 version = "0.1.0"
 dependencies = [
@@ -1604,12 +1799,12 @@ checksum = "e3b5ca7a04898ad4bcd41c90c5285445ff5b791899bb1b0abdd2a2aa791211d7"
 [[package]]
 name = "bytecode-interpreter-crypto"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "anyhow",
  "curve25519-dalek-fiat",
  "ed25519-dalek-fiat",
- "sha2",
+ "sha2 0.9.9",
  "sha3",
 ]
 
@@ -1651,9 +1846,9 @@ dependencies = [
 
 [[package]]
 name = "camino"
-version = "1.0.7"
+version = "1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f3132262930b0522068049f5870a856ab8affc80c70d08b6ecb785771a6fc23"
+checksum = "07fd178c5af4d59e83498ef15cf3f154e1a6f9d091270cb86283c65ef44e9ef0"
 dependencies = [
  "serde 1.0.137",
 ]
@@ -1741,7 +1936,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aptos-infallible",
- "aptos-metrics",
+ "aptos-metrics-core",
  "aptos-types",
  "aptos-workspace-hack",
  "futures",
@@ -1810,9 +2005,9 @@ dependencies = [
 
 [[package]]
 name = "clang-sys"
-version = "1.3.1"
+version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4cc00842eed744b858222c4c9faf7243aafc6d33f92f96935263ef4d8a41ce21"
+checksum = "bf6b561dcf059c85bbe388e0a7b0a1469acb3934cc0cfa148613a830629e3049"
 dependencies = [
  "glob",
  "libc",
@@ -1836,9 +2031,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.1.17"
+version = "3.1.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "47582c09be7c8b32c0ab3a6181825ababb713fde6fff20fc573a3870dd45c6a0"
+checksum = "d2dbdf4bdacb33466e854ce889eee8dfd5729abf7ccd7664d0a2d60cd384440b"
 dependencies = [
  "atty",
  "bitflags",
@@ -1853,15 +2048,15 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "3.1.7"
+version = "3.1.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3aab4734e083b809aaf5794e14e756d1c798d2c69c7f7de7a09a2f5214993c1"
+checksum = "25320346e922cffe59c0bbc5410c8d8784509efb321488971081313cb1e1a33c"
 dependencies = [
  "heck 0.4.0",
  "proc-macro-error",
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
- "syn 1.0.92",
+ "syn 1.0.95",
 ]
 
 [[package]]
@@ -1961,7 +2156,7 @@ dependencies = [
  "aptos-infallible",
  "aptos-logger",
  "aptos-mempool",
- "aptos-metrics",
+ "aptos-metrics-core",
  "aptos-secure-storage",
  "aptos-temppath",
  "aptos-types",
@@ -1984,12 +2179,13 @@ dependencies = [
  "futures",
  "itertools",
  "mirai-annotations",
+ "move-deps",
  "network",
  "num-derive",
  "num-traits 0.2.15",
  "once_cell",
  "proptest",
- "rand 0.8.4",
+ "rand 0.7.3",
  "safety-rules",
  "schemadb",
  "serde 1.0.137",
@@ -2031,6 +2227,7 @@ dependencies = [
  "aptos-workspace-hack",
  "bcs",
  "executor-types",
+ "futures",
  "itertools",
  "mirai-annotations",
  "proptest",
@@ -2062,9 +2259,9 @@ checksum = "fbdcdcb6d86f71c5e97409ad45898af11cbc995b4ee8112d59095a28d376c935"
 
 [[package]]
 name = "const_format"
-version = "0.2.23"
+version = "0.2.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0936ffe6d0c8d6a51b3b0a73b2acbe925d786f346cf45bfddc8341d79fb7dc8a"
+checksum = "2906f2480cdc015e998deac388331a0f1c1cd88744948c749513020c83c370bc"
 dependencies = [
  "const_format_proc_macros",
 ]
@@ -2075,10 +2272,16 @@ version = "0.2.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ef196d5d972878a48da7decb7686eded338b4858fbabeed513d63a7c98b2b82d"
 dependencies = [
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
  "unicode-xid 0.2.3",
 ]
+
+[[package]]
+name = "convert_case"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
 
 [[package]]
 name = "cookie"
@@ -2092,12 +2295,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "cookie"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94d4706de1b0fa5b132270cddffa8585166037822e260a944fe161acd137ca05"
+dependencies = [
+ "aes-gcm",
+ "base64",
+ "hkdf 0.12.3",
+ "hmac 0.12.1",
+ "percent-encoding",
+ "rand 0.8.5",
+ "sha2 0.10.2",
+ "subtle",
+ "time 0.3.9",
+ "version_check",
+]
+
+[[package]]
 name = "cookie_store"
 version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b3f7034c0932dc36f5bd8ec37368d971346809435824f277cb3b8299fc56167c"
 dependencies = [
- "cookie",
+ "cookie 0.15.1",
  "idna",
  "log",
  "publicsuffix",
@@ -2412,6 +2633,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "darling"
+version = "0.13.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a01d95850c592940db9b8194bc39f4bc0e89dee5c4265e4b1807c34a9aba453c"
+dependencies = [
+ "darling_core",
+ "darling_macro",
+]
+
+[[package]]
+name = "darling_core"
+version = "0.13.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "859d65a907b6852c9361e3185c862aae7fafd2887876799fa55f5f99dc40d610"
+dependencies = [
+ "fnv",
+ "ident_case",
+ "proc-macro2 1.0.39",
+ "quote 1.0.18",
+ "strsim 0.10.0",
+ "syn 1.0.95",
+]
+
+[[package]]
+name = "darling_macro"
+version = "0.13.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c972679f83bdf9c42bd905396b6c3588a843a17f0f16dfcfa3e2c5d57441835"
+dependencies = [
+ "darling_core",
+ "quote 1.0.18",
+ "syn 1.0.95",
+]
+
+[[package]]
 name = "dashmap"
 version = "5.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2432,7 +2688,7 @@ dependencies = [
  "aptos-id-generator",
  "aptos-infallible",
  "aptos-logger",
- "aptos-metrics",
+ "aptos-metrics-core",
  "aptos-types",
  "aptos-workspace-hack",
  "async-trait",
@@ -2442,7 +2698,7 @@ dependencies = [
  "futures",
  "network",
  "once_cell",
- "rand 0.8.4",
+ "rand 0.7.3",
  "serde 1.0.137",
  "short-hex-str",
  "storage-service-types",
@@ -2504,6 +2760,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "derive_more"
+version = "0.99.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4fb810d30a7c1953f91334de7244731fc3f3c10d7fe163338a35b9f640960321"
+dependencies = [
+ "convert_case",
+ "proc-macro2 1.0.39",
+ "quote 1.0.18",
+ "rustc_version 0.4.0",
+ "syn 1.0.95",
+]
+
+[[package]]
 name = "determinator"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2539,7 +2808,7 @@ dependencies = [
  "diesel_derives",
  "num-bigint 0.2.6",
  "num-integer",
- "num-traits 0.1.43",
+ "num-traits 0.2.15",
  "pq-sys",
  "r2d2",
  "serde_json",
@@ -2551,9 +2820,9 @@ version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "45f5098f628d02a7a0f68ddba586fb61e80edec3bdc1be3b921f4ceec60858d3"
 dependencies = [
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
- "syn 1.0.92",
+ "syn 1.0.95",
 ]
 
 [[package]]
@@ -2622,6 +2891,7 @@ checksum = "f2fb860ca6fafa5552fb6d0e816a69c8e49f0908bf524e30a90d97c85892d506"
 dependencies = [
  "block-buffer 0.10.2",
  "crypto-common",
+ "subtle",
 ]
 
 [[package]]
@@ -2712,9 +2982,9 @@ dependencies = [
 
 [[package]]
 name = "ed25519"
-version = "1.4.1"
+version = "1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d5c4b5e5959dc2c2b89918d8e2cc40fcdd623cef026ed09d2f0ee05199dc8e4"
+checksum = "1e9c280362032ea4203659fc489832d0204ef09f247a0506f170dafcac08c369"
 dependencies = [
  "serde 1.0.137",
  "signature",
@@ -2723,14 +2993,15 @@ dependencies = [
 [[package]]
 name = "ed25519-dalek"
 version = "1.0.1"
-source = "git+https://github.com/dalek-cryptography/ed25519-dalek?rev=44488e43b8d61fa8263b146f9a1beba5549f8b0e#44488e43b8d61fa8263b146f9a1beba5549f8b0e"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c762bae6dcaf24c4c84667b8579785430908723d5c889f469d76a41d59cc7a9d"
 dependencies = [
  "curve25519-dalek",
  "ed25519",
- "rand 0.8.4",
+ "rand 0.7.3",
  "serde 1.0.137",
  "serde_bytes",
- "sha2",
+ "sha2 0.9.9",
  "zeroize",
 ]
 
@@ -2742,10 +3013,10 @@ checksum = "97c6ac152eba578c1c53d2cefe8ad02e239e3d6f971b0f1ef3cb54cd66037fa0"
 dependencies = [
  "curve25519-dalek-fiat",
  "ed25519",
- "rand 0.8.4",
+ "rand 0.8.5",
  "serde 1.0.137",
  "serde_bytes",
- "sha2",
+ "sha2 0.9.9",
  "zeroize",
 ]
 
@@ -2777,9 +3048,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0eb359f1476bf611266ac1f5355bc14aeca37b299d0ebccc038ee7058891c9cb"
 dependencies = [
  "once_cell",
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
- "syn 1.0.92",
+ "syn 1.0.95",
 ]
 
 [[package]]
@@ -2856,10 +3127,10 @@ dependencies = [
  "anyhow",
  "aptos-config",
  "aptos-crypto",
- "aptos-genesis-tool",
+ "aptos-genesis",
  "aptos-infallible",
  "aptos-logger",
- "aptos-metrics",
+ "aptos-metrics-core",
  "aptos-secure-net",
  "aptos-state-view",
  "aptos-temppath",
@@ -2877,7 +3148,7 @@ dependencies = [
  "move-deps",
  "once_cell",
  "proptest",
- "rand 0.8.4",
+ "rand 0.7.3",
  "rayon",
  "scratchpad",
  "serde 1.0.137",
@@ -2891,7 +3162,7 @@ version = "0.1.0"
 dependencies = [
  "aptos-config",
  "aptos-crypto",
- "aptos-genesis-tool",
+ "aptos-genesis",
  "aptos-infallible",
  "aptos-jellyfish-merkle",
  "aptos-logger",
@@ -2909,12 +3180,14 @@ dependencies = [
  "executor",
  "executor-types",
  "indicatif",
+ "itertools",
  "jemallocator",
- "rand 0.8.4",
+ "num_cpus",
+ "rand 0.7.3",
  "rayon",
  "schemadb",
+ "scratchpad",
  "serde 1.0.137",
- "storage-client",
  "storage-interface",
  "structopt",
  "toml",
@@ -2927,7 +3200,8 @@ dependencies = [
  "anyhow",
  "aptos-config",
  "aptos-crypto",
- "aptos-genesis-tool",
+ "aptos-genesis",
+ "aptos-sdk",
  "aptos-state-view",
  "aptos-temppath",
  "aptos-transaction-builder",
@@ -2938,9 +3212,8 @@ dependencies = [
  "executor",
  "executor-types",
  "move-deps",
- "rand 0.8.4",
+ "rand 0.7.3",
  "storage-interface",
- "storage-service",
  "vm-genesis",
 ]
 
@@ -2981,7 +3254,7 @@ checksum = "ec3245a0ca564e7f3c797d20d833a6870f57a728ac967d5225b3ffdef4465011"
 dependencies = [
  "lazy_static 1.4.0",
  "log",
- "rand 0.8.4",
+ "rand 0.8.5",
 ]
 
 [[package]]
@@ -3061,7 +3334,8 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "aptos-config",
- "aptos-genesis-tool",
+ "aptos-faucet",
+ "aptos-genesis",
  "aptos-logger",
  "aptos-rest-client",
  "aptos-retrier",
@@ -3072,13 +3346,15 @@ dependencies = [
  "async-trait",
  "cached-framework-packages",
  "debug-interface",
+ "either",
  "futures",
+ "hex",
  "hyper",
  "hyper-proxy",
  "hyper-tls",
  "k8s-openapi",
  "kube",
- "rand 0.8.4",
+ "rand 0.7.3",
  "rayon",
  "regex",
  "reqwest",
@@ -3092,7 +3368,7 @@ dependencies = [
  "tempfile",
  "termcolor",
  "tokio",
- "transaction-emitter",
+ "transaction-emitter-lib",
  "url",
 ]
 
@@ -3138,7 +3414,7 @@ dependencies = [
  "aptos-vm",
  "aptos-workspace-hack",
  "bcs",
- "clap 3.1.17",
+ "clap 3.1.18",
  "datatest-stable",
  "dir-diff",
  "include_dir 0.7.2",
@@ -3146,7 +3422,8 @@ dependencies = [
  "move-deps",
  "once_cell",
  "rayon",
- "sha2",
+ "sha2 0.9.9",
+ "siphasher",
  "smallvec",
  "structopt",
  "tempfile",
@@ -3167,9 +3444,9 @@ checksum = "fed34cd105917e91daa4da6b3728c47b068749d6a62c59811f06ed2ac71d9da7"
 
 [[package]]
 name = "futures"
-version = "0.3.17"
+version = "0.3.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a12aa0eb539080d55c3f2d45a67c3b58b6b0773c1a3ca2dfec66d58c97fd66ca"
+checksum = "f73fe65f54d1e12b726f517d3e2135ca3125a437b6d998caf1962961f7172d9e"
 dependencies = [
  "futures-channel",
  "futures-core",
@@ -3198,9 +3475,9 @@ checksum = "0c09fd04b7e4073ac7156a9539b57a484a8ea920f79c7c675d05d289ab6110d3"
 
 [[package]]
 name = "futures-executor"
-version = "0.3.17"
+version = "0.3.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45025be030969d763025784f7f355043dc6bc74093e4ecc5000ca4dc50d8745c"
+checksum = "9420b90cfa29e327d0429f19be13e7ddb68fa1cccb09d65e5706b8c7a749b8a6"
 dependencies = [
  "futures-core",
  "futures-task",
@@ -3215,15 +3492,13 @@ checksum = "fc4045962a5a5e935ee2fdedaa4e08284547402885ab326734432bed5d12966b"
 
 [[package]]
 name = "futures-macro"
-version = "0.3.17"
+version = "0.3.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18e4a4b95cea4b4ccbcf1c5675ca7c4ee4e9e75eb79944d07defde18068f79bb"
+checksum = "33c1e13800337f4d4d7a316bf45a567dbcb6ffe087f16424852d97e97a91f512"
 dependencies = [
- "autocfg",
- "proc-macro-hack",
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
- "syn 1.0.92",
+ "syn 1.0.95",
 ]
 
 [[package]]
@@ -3240,11 +3515,10 @@ checksum = "57c66a976bf5909d801bbef33416c41372779507e7a6b3a5e25e4749c58f776a"
 
 [[package]]
 name = "futures-util"
-version = "0.3.17"
+version = "0.3.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36568465210a3a6ee45e1f165136d68671471a501e632e9a98d96872222b5481"
+checksum = "d8b7abd5d659d9b90c8cba917f6ec750a74e2dc23902ef9cd4cc8c8b22e6036a"
 dependencies = [
- "autocfg",
  "futures-channel",
  "futures-core",
  "futures-io",
@@ -3254,8 +3528,6 @@ dependencies = [
  "memchr",
  "pin-project-lite",
  "pin-utils",
- "proc-macro-hack",
- "proc-macro-nested",
  "slab",
 ]
 
@@ -3279,7 +3551,7 @@ dependencies = [
  "consensus-types",
  "move-deps",
  "network",
- "rand 0.8.4",
+ "rand 0.7.3",
  "serde 1.0.137",
  "serde-reflection 0.3.5 (git+https://github.com/aptos-labs/serde-reflection)",
  "serde_yaml",
@@ -3375,15 +3647,15 @@ dependencies = [
 
 [[package]]
 name = "gimli"
-version = "0.23.0"
+version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6503fe142514ca4799d4c26297c4248239fe8838d827db6bd6065c6ed29a6ce"
+checksum = "78cc372d058dcf6d5ecd98510e7fbc9e5aec4d21de70f65fea8fecebcd881bd4"
 
 [[package]]
 name = "git2"
-version = "0.14.2"
+version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3826a6e0e2215d7a41c2bfc7c9244123969273f3476b939a226aac0ab56e9e3c"
+checksum = "d0155506aab710a86160ddb504a480d2964d7ab5b9e62419be69e0032bc5931c"
 dependencies = [
  "bitflags",
  "libc",
@@ -3495,7 +3767,7 @@ dependencies = [
  "indexmap",
  "slab",
  "tokio",
- "tokio-util 0.7.1",
+ "tokio-util 0.7.2",
  "tracing",
 ]
 
@@ -3535,16 +3807,16 @@ checksum = "eabb4a44450da02c90444cf74558da904edde8fb4e9035a9a6a4e15445af0bd7"
 
 [[package]]
 name = "handlebars"
-version = "4.2.2"
+version = "4.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99d6a30320f094710245150395bc763ad23128d6a1ebbad7594dc4164b62c56b"
+checksum = "d113a9853e5accd30f43003560b5563ffbb007e3f325e8b103fa0d0029c6e6df"
 dependencies = [
  "log",
  "pest",
  "pest_derive",
- "quick-error 2.0.1",
  "serde 1.0.137",
  "serde_json",
+ "thiserror",
 ]
 
 [[package]]
@@ -3627,7 +3899,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51ab2f639c231793c5f6114bdb9bbe50a7dbbfcd7c7c6bd8475dec2d991e964f"
 dependencies = [
  "digest 0.9.0",
- "hmac",
+ "hmac 0.10.1",
+]
+
+[[package]]
+name = "hkdf"
+version = "0.12.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "791a029f6b9fc27657f6f188ec6e5e43f6911f6f878e0dc5501396e09809d437"
+dependencies = [
+ "hmac 0.12.1",
 ]
 
 [[package]]
@@ -3638,6 +3919,15 @@ checksum = "c1441c6b1e930e2817404b5046f1f989899143a12bf92de603b69f4e0aee1e15"
 dependencies = [
  "crypto-mac",
  "digest 0.9.0",
+]
+
+[[package]]
+name = "hmac"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c49c37c09c17a53d937dfbb742eb3a961d65a994e6bcdcf37e7399d0cc8ab5e"
+dependencies = [
+ "digest 0.10.3",
 ]
 
 [[package]]
@@ -3668,7 +3958,7 @@ checksum = "ff8670570af52249509a86f5e3e18a08c60b177071826898fde8997cf5f6bfbb"
 dependencies = [
  "bytes",
  "fnv",
- "itoa 1.0.1",
+ "itoa 1.0.2",
 ]
 
 [[package]]
@@ -3740,7 +4030,7 @@ dependencies = [
  "http-body",
  "httparse",
  "httpdate",
- "itoa 1.0.1",
+ "itoa 1.0.2",
  "pin-project-lite",
  "socket2",
  "tokio",
@@ -3791,6 +4081,12 @@ dependencies = [
  "tokio",
  "tokio-native-tls",
 ]
+
+[[package]]
+name = "ident_case"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 
 [[package]]
 name = "idna"
@@ -3864,9 +4160,9 @@ checksum = "0a0c890c85da4bab7bce4204c707396bbd3c6c8a681716a51c8814cfc2b682df"
 dependencies = [
  "anyhow",
  "proc-macro-hack",
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
- "syn 1.0.92",
+ "syn 1.0.95",
 ]
 
 [[package]]
@@ -3875,7 +4171,7 @@ version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e074c19deab2501407c91ba1860fa3d6820bfde307db6d8cb851b55a10be89b"
 dependencies = [
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
 ]
 
@@ -3893,9 +4189,9 @@ checksum = "ce23b50ad8242c51a442f3ff322d56b02f08852c77e4c0b4d3fd684abc89c683"
 
 [[package]]
 name = "indexmap"
-version = "1.8.1"
+version = "1.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f647032dfaa1f8b6dc29bd3edb7bbef4861b8b8007ebb118d6db284fd59f6ee"
+checksum = "e6012d540c5baa3589337a98ce73408de9b5a25ec9fc2c6fd6be8f0d39e0ca5a"
 dependencies = [
  "autocfg",
  "hashbrown 0.11.2",
@@ -3976,9 +4272,9 @@ checksum = "b71991ff56294aa922b450139ee08b3bfc70982c6b2c7562771375cf73542dd4"
 
 [[package]]
 name = "itoa"
-version = "1.0.1"
+version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1aab8fc367588b89dcee83ab0fd66b72b50b72fa1904d7095045ace2b0c81c35"
+checksum = "112c678d4050afce233f4f2852bb2eb519230b3cf12f33585275537d7e41578d"
 
 [[package]]
 name = "jemalloc-sys"
@@ -4091,7 +4387,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-native-tls",
- "tokio-util 0.6.9",
+ "tokio-util 0.6.10",
  "tower",
  "url",
 ]
@@ -4120,7 +4416,7 @@ dependencies = [
  "once_cell",
  "proptest",
  "proptest-derive",
- "rand 0.8.4",
+ "rand 0.7.3",
  "serde 1.0.137",
  "vm-genesis",
 ]
@@ -4178,9 +4474,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.125"
+version = "0.2.126"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5916d2ae698f6de9bfb891ad7a8d65c09d232dc58cc4ac433c7da3b2fd84bc2b"
+checksum = "349d5a591cd28b49e1d1037471617a32ddcda5731b99419008085f72d5a53836"
 
 [[package]]
 name = "libfuzzer-sys"
@@ -4194,9 +4490,9 @@ dependencies = [
 
 [[package]]
 name = "libgit2-sys"
-version = "0.13.2+1.4.2"
+version = "0.13.4+1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a42de9a51a5c12e00fc0e4ca6bc2ea43582fc6418488e8f615e905d886f258b"
+checksum = "d0fa6563431ede25f5cc7f6d803c6afbc1c5d3ad3d4925d12c882bf2b526f5d1"
 dependencies = [
  "cc",
  "libc",
@@ -4362,9 +4658,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9753f12909fd8d923f75ae5c3258cae1ed3c8ec052e1b38c93c21a6d157f789c"
 dependencies = [
  "migrations_internals",
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
- "syn 1.0.92",
+ "syn 1.0.95",
 ]
 
 [[package]]
@@ -4391,12 +4687,11 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "miniz_oxide"
-version = "0.4.4"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a92518e98c078586bc6c934028adcca4c92a53d6a958196de835170a01d84e4b"
+checksum = "d2b29bd4bc3f33391105ebee3589c19197c4271e3e5a9ec9bfe8127eeff8f082"
 dependencies = [
  "adler",
- "autocfg",
 ]
 
 [[package]]
@@ -4414,16 +4709,14 @@ dependencies = [
 
 [[package]]
 name = "mio"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52da4364ffb0e4fe33a9841a98a3f3014fb964045ce4f7a45a398243c8d6b0c9"
+checksum = "713d550d9b44d89174e066b7a6217ae06234c10cb47819a88290d2b353c31799"
 dependencies = [
  "libc",
  "log",
- "miow",
- "ntapi",
  "wasi 0.11.0+wasi-snapshot-preview1",
- "winapi 0.3.9",
+ "windows-sys",
 ]
 
 [[package]]
@@ -4443,9 +4736,9 @@ checksum = "c9be0862c1b3f26a88803c4a49de6889c10e608b3ee9344e6ef5b45fb37ad3d1"
 
 [[package]]
 name = "mockall"
-version = "0.11.0"
+version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d4d70639a72f972725db16350db56da68266ca368b2a1fe26724a903ad3d6b8"
+checksum = "5641e476bbaf592a3939a7485fa079f427b4db21407d5ebfd5bba4e07a1f6f4c"
 dependencies = [
  "cfg-if 1.0.0",
  "downcast",
@@ -4458,20 +4751,20 @@ dependencies = [
 
 [[package]]
 name = "mockall_derive"
-version = "0.11.0"
+version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79ef208208a0dea3f72221e26e904cdc6db2e481d9ade89081ddd494f1dbaa6b"
+checksum = "262d56735932ee0240d515656e5a7667af3af2a5b0af4da558c4cff2b2aeb0c7"
 dependencies = [
  "cfg-if 1.0.0",
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
- "syn 1.0.92",
+ "syn 1.0.95",
 ]
 
 [[package]]
 name = "move-abigen"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "anyhow",
  "bcs",
@@ -4479,7 +4772,7 @@ dependencies = [
  "log",
  "move-bytecode-verifier",
  "move-command-line-common",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3)",
+ "move-core-types",
  "move-model",
  "serde 1.0.137",
 ]
@@ -4487,10 +4780,10 @@ dependencies = [
 [[package]]
 name = "move-binary-format"
 version = "0.0.3"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "anyhow",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3)",
+ "move-core-types",
  "once_cell",
  "proptest",
  "proptest-derive",
@@ -4502,18 +4795,18 @@ dependencies = [
 [[package]]
 name = "move-borrow-graph"
 version = "0.0.1"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 
 [[package]]
 name = "move-bytecode-source-map"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "anyhow",
  "bcs",
  "move-binary-format",
  "move-command-line-common",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3)",
+ "move-core-types",
  "move-ir-types",
  "move-symbol-pool",
  "serde 1.0.137",
@@ -4522,11 +4815,11 @@ dependencies = [
 [[package]]
 name = "move-bytecode-utils"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "anyhow",
  "move-binary-format",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3)",
+ "move-core-types",
  "petgraph 0.5.1",
  "serde-reflection 0.3.5 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -4534,22 +4827,22 @@ dependencies = [
 [[package]]
 name = "move-bytecode-verifier"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "anyhow",
  "move-binary-format",
  "move-borrow-graph",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3)",
+ "move-core-types",
  "petgraph 0.5.1",
 ]
 
 [[package]]
 name = "move-bytecode-viewer"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "anyhow",
- "clap 3.1.17",
+ "clap 3.1.18",
  "crossterm 0.21.0",
  "move-binary-format",
  "move-bytecode-source-map",
@@ -4563,11 +4856,11 @@ dependencies = [
 [[package]]
 name = "move-cli"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "anyhow",
  "bcs",
- "clap 3.1.17",
+ "clap 3.1.18",
  "codespan-reporting",
  "colored",
  "difference",
@@ -4579,7 +4872,7 @@ dependencies = [
  "move-bytecode-viewer",
  "move-command-line-common",
  "move-compiler",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3)",
+ "move-core-types",
  "move-coverage",
  "move-disassembler",
  "move-errmapgen",
@@ -4604,24 +4897,26 @@ dependencies = [
 [[package]]
 name = "move-command-line-common"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "anyhow",
  "difference",
  "hex",
+ "move-core-types",
+ "num-bigint 0.4.3",
  "serde 1.0.137",
- "sha2",
+ "sha2 0.9.9",
  "walkdir",
 ]
 
 [[package]]
 name = "move-compiler"
 version = "0.0.1"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "anyhow",
  "bcs",
- "clap 3.1.17",
+ "clap 3.1.18",
  "codespan-reporting",
  "difference",
  "hex",
@@ -4630,7 +4925,7 @@ dependencies = [
  "move-bytecode-source-map",
  "move-bytecode-verifier",
  "move-command-line-common",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3)",
+ "move-core-types",
  "move-ir-to-bytecode",
  "move-ir-types",
  "move-symbol-pool",
@@ -4646,23 +4941,7 @@ dependencies = [
 [[package]]
 name = "move-core-types"
 version = "0.0.4"
-source = "git+https://github.com/move-language/move?rev=1b6b7513dcc1a5c866f178ca5c1e74beb2ce181e#1b6b7513dcc1a5c866f178ca5c1e74beb2ce181e"
-dependencies = [
- "anyhow",
- "bcs",
- "hex",
- "mirai-annotations",
- "once_cell",
- "rand 0.8.4",
- "ref-cast",
- "serde 1.0.137",
- "serde_bytes",
-]
-
-[[package]]
-name = "move-core-types"
-version = "0.0.4"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "anyhow",
  "bcs",
@@ -4670,7 +4949,7 @@ dependencies = [
  "once_cell",
  "proptest",
  "proptest-derive",
- "rand 0.8.4",
+ "rand 0.8.5",
  "ref-cast",
  "serde 1.0.137",
  "serde_bytes",
@@ -4679,17 +4958,17 @@ dependencies = [
 [[package]]
 name = "move-coverage"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "anyhow",
  "bcs",
- "clap 3.1.17",
+ "clap 3.1.18",
  "codespan",
  "colored",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-command-line-common",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3)",
+ "move-core-types",
  "move-ir-types",
  "once_cell",
  "petgraph 0.5.1",
@@ -4707,7 +4986,7 @@ dependencies = [
  "move-cli",
  "move-command-line-common",
  "move-compiler",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3)",
+ "move-core-types",
  "move-docgen",
  "move-errmapgen",
  "move-ir-compiler",
@@ -4730,17 +5009,17 @@ dependencies = [
 [[package]]
 name = "move-disassembler"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "anyhow",
- "clap 3.1.17",
+ "clap 3.1.18",
  "colored",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-bytecode-verifier",
  "move-command-line-common",
  "move-compiler",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3)",
+ "move-core-types",
  "move-coverage",
  "move-ir-types",
 ]
@@ -4748,7 +5027,7 @@ dependencies = [
 [[package]]
 name = "move-docgen"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "anyhow",
  "codespan",
@@ -4757,7 +5036,7 @@ dependencies = [
  "log",
  "move-compiler",
  "move-model",
- "num",
+ "num 0.4.0",
  "once_cell",
  "regex",
  "serde 1.0.137",
@@ -4766,13 +5045,13 @@ dependencies = [
 [[package]]
 name = "move-errmapgen"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "anyhow",
  "bcs",
  "log",
  "move-command-line-common",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3)",
+ "move-core-types",
  "move-model",
  "serde 1.0.137",
 ]
@@ -4784,7 +5063,7 @@ dependencies = [
  "aptos-types",
  "aptos-vm",
  "aptos-workspace-hack",
- "clap 3.1.17",
+ "clap 3.1.18",
  "move-deps",
  "tempfile",
 ]
@@ -4792,16 +5071,16 @@ dependencies = [
 [[package]]
 name = "move-ir-compiler"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "anyhow",
  "bcs",
- "clap 3.1.17",
+ "clap 3.1.18",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-bytecode-verifier",
  "move-command-line-common",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3)",
+ "move-core-types",
  "move-ir-to-bytecode",
  "move-ir-types",
  "move-symbol-pool",
@@ -4811,7 +5090,7 @@ dependencies = [
 [[package]]
 name = "move-ir-to-bytecode"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "anyhow",
  "codespan-reporting",
@@ -4819,7 +5098,7 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-source-map",
  "move-command-line-common",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3)",
+ "move-core-types",
  "move-ir-to-bytecode-syntax",
  "move-ir-types",
  "move-symbol-pool",
@@ -4830,12 +5109,12 @@ dependencies = [
 [[package]]
 name = "move-ir-to-bytecode-syntax"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "anyhow",
  "hex",
  "move-command-line-common",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3)",
+ "move-core-types",
  "move-ir-types",
  "move-symbol-pool",
 ]
@@ -4843,12 +5122,12 @@ dependencies = [
 [[package]]
 name = "move-ir-types"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "anyhow",
  "hex",
  "move-command-line-common",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3)",
+ "move-core-types",
  "move-symbol-pool",
  "once_cell",
  "serde 1.0.137",
@@ -4857,7 +5136,7 @@ dependencies = [
 [[package]]
 name = "move-model"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "anyhow",
  "codespan",
@@ -4870,11 +5149,11 @@ dependencies = [
  "move-bytecode-verifier",
  "move-command-line-common",
  "move-compiler",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3)",
+ "move-core-types",
  "move-disassembler",
  "move-ir-types",
  "move-symbol-pool",
- "num",
+ "num 0.4.0",
  "once_cell",
  "regex",
  "serde 1.0.137",
@@ -4883,19 +5162,20 @@ dependencies = [
 [[package]]
 name = "move-package"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "anyhow",
  "bcs",
- "clap 3.1.17",
+ "clap 3.1.18",
  "colored",
+ "dirs-next",
  "move-abigen",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-bytecode-utils",
  "move-command-line-common",
  "move-compiler",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3)",
+ "move-core-types",
  "move-docgen",
  "move-model",
  "move-symbol-pool",
@@ -4906,7 +5186,7 @@ dependencies = [
  "regex",
  "serde 1.0.137",
  "serde_yaml",
- "sha2",
+ "sha2 0.9.9",
  "tempfile",
  "toml",
  "walkdir",
@@ -4915,12 +5195,12 @@ dependencies = [
 [[package]]
 name = "move-prover"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "anyhow",
  "async-trait",
  "atty",
- "clap 3.1.17",
+ "clap 3.1.18",
  "codespan",
  "codespan-reporting",
  "futures",
@@ -4931,17 +5211,17 @@ dependencies = [
  "move-binary-format",
  "move-command-line-common",
  "move-compiler",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3)",
+ "move-core-types",
  "move-docgen",
  "move-errmapgen",
  "move-ir-types",
  "move-model",
  "move-prover-boogie-backend",
  "move-stackless-bytecode",
- "num",
+ "num 0.4.0",
  "once_cell",
  "pretty",
- "rand 0.8.4",
+ "rand 0.8.5",
  "serde 1.0.137",
  "serde_json",
  "simplelog",
@@ -4952,7 +5232,7 @@ dependencies = [
 [[package]]
 name = "move-prover-boogie-backend"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4963,13 +5243,13 @@ dependencies = [
  "log",
  "move-binary-format",
  "move-command-line-common",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3)",
+ "move-core-types",
  "move-model",
  "move-stackless-bytecode",
- "num",
+ "num 0.4.0",
  "once_cell",
  "pretty",
- "rand 0.8.4",
+ "rand 0.8.5",
  "regex",
  "serde 1.0.137",
  "serde_json",
@@ -4980,25 +5260,25 @@ dependencies = [
 [[package]]
 name = "move-read-write-set-types"
 version = "0.0.3"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "anyhow",
  "move-binary-format",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3)",
+ "move-core-types",
  "serde 1.0.137",
 ]
 
 [[package]]
 name = "move-resource-viewer"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "anyhow",
  "bcs",
  "hex",
  "move-binary-format",
  "move-bytecode-utils",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3)",
+ "move-core-types",
  "once_cell",
  "serde 1.0.137",
 ]
@@ -5006,7 +5286,7 @@ dependencies = [
 [[package]]
 name = "move-stackless-bytecode"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "codespan",
  "codespan-reporting",
@@ -5019,11 +5299,11 @@ dependencies = [
  "move-bytecode-verifier",
  "move-command-line-common",
  "move-compiler",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3)",
+ "move-core-types",
  "move-ir-to-bytecode",
  "move-model",
  "move-read-write-set-types",
- "num",
+ "num 0.4.0",
  "once_cell",
  "paste",
  "petgraph 0.5.1",
@@ -5033,37 +5313,37 @@ dependencies = [
 [[package]]
 name = "move-stackless-bytecode-interpreter"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "anyhow",
  "bytecode-interpreter-crypto",
- "clap 3.1.17",
+ "clap 3.1.18",
  "codespan-reporting",
  "itertools",
  "move-binary-format",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3)",
+ "move-core-types",
  "move-model",
  "move-stackless-bytecode",
- "num",
+ "num 0.4.0",
  "serde 1.0.137",
 ]
 
 [[package]]
 name = "move-stdlib"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "log",
  "move-binary-format",
  "move-command-line-common",
  "move-compiler",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3)",
+ "move-core-types",
  "move-docgen",
  "move-errmapgen",
  "move-prover",
  "move-vm-runtime",
  "move-vm-types",
- "sha2",
+ "sha2 0.9.9",
  "sha3",
  "smallvec",
  "walkdir",
@@ -5072,7 +5352,7 @@ dependencies = [
 [[package]]
 name = "move-symbol-pool"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "once_cell",
  "serde 1.0.137",
@@ -5081,13 +5361,13 @@ dependencies = [
 [[package]]
 name = "move-table-extension"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "anyhow",
  "bcs",
  "better_any",
  "move-binary-format",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3)",
+ "move-core-types",
  "move-vm-runtime",
  "move-vm-types",
  "once_cell",
@@ -5098,10 +5378,10 @@ dependencies = [
 [[package]]
 name = "move-unit-test"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "anyhow",
- "clap 3.1.17",
+ "clap 3.1.18",
  "codespan-reporting",
  "colored",
  "itertools",
@@ -5109,7 +5389,7 @@ dependencies = [
  "move-bytecode-utils",
  "move-command-line-common",
  "move-compiler",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3)",
+ "move-core-types",
  "move-ir-types",
  "move-model",
  "move-resource-viewer",
@@ -5128,13 +5408,13 @@ dependencies = [
 [[package]]
 name = "move-vm-runtime"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "better_any",
  "fail 0.4.0",
  "move-binary-format",
  "move-bytecode-verifier",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3)",
+ "move-core-types",
  "move-vm-types",
  "once_cell",
  "parking_lot 0.11.2",
@@ -5145,25 +5425,44 @@ dependencies = [
 [[package]]
 name = "move-vm-test-utils"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "anyhow",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3)",
+ "move-core-types",
  "move-table-extension",
 ]
 
 [[package]]
 name = "move-vm-types"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "bcs",
  "move-binary-format",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3)",
+ "move-core-types",
  "once_cell",
  "proptest",
  "serde 1.0.137",
  "smallvec",
+]
+
+[[package]]
+name = "multer"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f8f35e687561d5c1667590911e6698a8cb714a134a7505718a182e7bc9d3836"
+dependencies = [
+ "bytes",
+ "encoding_rs",
+ "futures-util",
+ "http",
+ "httparse",
+ "log",
+ "memchr",
+ "mime",
+ "spin 0.9.3",
+ "tokio",
+ "version_check",
 ]
 
 [[package]]
@@ -5178,7 +5477,7 @@ dependencies = [
  "mime",
  "mime_guess",
  "quick-error 1.2.3",
- "rand 0.8.4",
+ "rand 0.8.5",
  "safemem",
  "tempfile",
  "twoway",
@@ -5189,7 +5488,6 @@ name = "mvhashmap"
 version = "0.1.0"
 dependencies = [
  "aptos-workspace-hack",
- "arc-swap",
  "crossbeam",
  "dashmap",
  "proptest",
@@ -5249,7 +5547,7 @@ dependencies = [
  "proxy",
  "serde 1.0.137",
  "tokio",
- "tokio-util 0.6.9",
+ "tokio-util 0.7.2",
  "url",
 ]
 
@@ -5265,10 +5563,9 @@ dependencies = [
  "aptos-id-generator",
  "aptos-infallible",
  "aptos-logger",
- "aptos-metrics",
+ "aptos-metrics-core",
  "aptos-proptest-helpers",
  "aptos-rate-limiter",
- "aptos-telemetry",
  "aptos-time-service",
  "aptos-types",
  "aptos-workspace-hack",
@@ -5290,8 +5587,8 @@ dependencies = [
  "pin-project",
  "proptest",
  "proptest-derive",
- "rand 0.8.4",
- "rand_core 0.6.3",
+ "rand 0.7.3",
+ "rand_core 0.5.1",
  "serde 1.0.137",
  "serde_bytes",
  "serde_json",
@@ -5300,8 +5597,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-retry",
- "tokio-stream",
- "tokio-util 0.6.9",
+ "tokio-util 0.7.2",
 ]
 
 [[package]]
@@ -5324,7 +5620,7 @@ dependencies = [
  "netcore",
  "network",
  "network-discovery",
- "rand 0.8.4",
+ "rand 0.7.3",
  "serde 1.0.137",
  "tokio",
 ]
@@ -5337,7 +5633,7 @@ dependencies = [
  "aptos-config",
  "aptos-crypto",
  "aptos-logger",
- "aptos-metrics",
+ "aptos-metrics-core",
  "aptos-secure-storage",
  "aptos-temppath",
  "aptos-time-service",
@@ -5351,7 +5647,7 @@ dependencies = [
  "netcore",
  "network",
  "once_cell",
- "rand 0.8.4",
+ "rand 0.7.3",
  "serde_yaml",
  "short-hex-str",
  "tokio",
@@ -5450,15 +5746,29 @@ dependencies = [
 
 [[package]]
 name = "num"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b8536030f9fea7127f841b45bb6243b27255787fb4eb83958aa1ef9d2fdc0c36"
+dependencies = [
+ "num-bigint 0.2.6",
+ "num-complex 0.2.4",
+ "num-integer",
+ "num-iter",
+ "num-rational 0.2.4",
+ "num-traits 0.2.15",
+]
+
+[[package]]
+name = "num"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "43db66d1170d347f9a065114077f7dccb00c1b9478c89384490a3425279a4606"
 dependencies = [
  "num-bigint 0.4.3",
- "num-complex",
+ "num-complex 0.4.1",
  "num-integer",
  "num-iter",
- "num-rational",
+ "num-rational 0.4.0",
  "num-traits 0.2.15",
 ]
 
@@ -5486,6 +5796,16 @@ dependencies = [
 
 [[package]]
 name = "num-complex"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6b19411a9719e753aff12e5187b74d60d3dc449ec3f4dc21e3989c3f554bc95"
+dependencies = [
+ "autocfg",
+ "num-traits 0.2.15",
+]
+
+[[package]]
+name = "num-complex"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fbc387afefefd5e9e39493299f3069e14a140dd34dc19b4c1c1a8fddb6a790"
@@ -5499,9 +5819,9 @@ version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "876a53fff98e03a936a674b29568b0e605f06b29372c2489ff4de23f1949743d"
 dependencies = [
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
- "syn 1.0.92",
+ "syn 1.0.95",
 ]
 
 [[package]]
@@ -5521,6 +5841,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d03e6c028c5dc5cac6e2dec0efda81fc887605bb3d884578bb6d6bf7514e252"
 dependencies = [
  "autocfg",
+ "num-integer",
+ "num-traits 0.2.15",
+]
+
+[[package]]
+name = "num-rational"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c000134b5dbf44adc5cb772486d335293351644b801551abe8f75c84cfa4aef"
+dependencies = [
+ "autocfg",
+ "num-bigint 0.2.6",
  "num-integer",
  "num-traits 0.2.15",
 ]
@@ -5560,9 +5892,9 @@ name = "num-variants"
 version = "0.1.0"
 dependencies = [
  "aptos-workspace-hack",
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
- "syn 1.0.92",
+ "syn 1.0.95",
 ]
 
 [[package]]
@@ -5572,6 +5904,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19e64526ebdee182341572e50e9ad03965aa510cd94427a4549448f285e957a1"
 dependencies = [
  "hermit-abi",
+ "libc",
+]
+
+[[package]]
+name = "num_threads"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2819ce041d2ee131036f4fc9d6ae7ae125a3a40e97ba64d04fe799ad9dabbb44"
+dependencies = [
  "libc",
 ]
 
@@ -5589,9 +5930,12 @@ checksum = "b8f8bdf33df195859076e54ab11ee78a1b208382d3a26ec40d142ffc1ecc49ef"
 
 [[package]]
 name = "object"
-version = "0.23.0"
+version = "0.28.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9a7ab5d64814df0fe4a4b5ead45ed6c5f181ee3ff04ba344313a6c80446c5d4"
+checksum = "e42c982f2d955fac81dd7e1d0e1426a7d702acd9c98d19ab01083a6a0328c424"
+dependencies = [
+ "memchr",
+]
 
 [[package]]
 name = "once_cell"
@@ -5638,9 +5982,9 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b501e44f11665960c7e7fcf062c7d96a14ade4aa98116c004b2e37b5be7d736c"
 dependencies = [
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
- "syn 1.0.92",
+ "syn 1.0.95",
 ]
 
 [[package]]
@@ -5683,9 +6027,9 @@ dependencies = [
 
 [[package]]
 name = "os_str_bytes"
-version = "6.0.0"
+version = "6.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e22443d1643a904602595ba1cd8f7d896afe56d26712531c5ff73a15b2fbf64"
+checksum = "029d8d0b2f198229de29dca79676f2738ff952edf3fde542eb8bf94d8c21b435"
 
 [[package]]
 name = "ouroboros"
@@ -5705,9 +6049,9 @@ checksum = "03f2cb802b5bdfdf52f1ffa0b54ce105e4d346e91990dd571f86c91321ad49e2"
 dependencies = [
  "Inflector",
  "proc-macro-error",
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
- "syn 1.0.92",
+ "syn 1.0.95",
 ]
 
 [[package]]
@@ -5798,6 +6142,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "parse_duration"
+version = "2.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7037e5e93e0172a5a96874380bf73bc6ecef022e26fa25f2be26864d6b3ba95d"
+dependencies = [
+ "lazy_static 1.4.0",
+ "num 0.2.1",
+ "regex",
+]
+
+[[package]]
 name = "paste"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5817,6 +6172,55 @@ name = "peeking_take_while"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19b17cddbe7ec3f8bc800887bab5e717348c95ea2ca0b1bf0837fb964dc67099"
+
+[[package]]
+name = "peer-monitoring-service-client"
+version = "0.1.0"
+dependencies = [
+ "aptos-config",
+ "aptos-types",
+ "aptos-workspace-hack",
+ "async-trait",
+ "channel",
+ "network",
+ "peer-monitoring-service-types",
+ "thiserror",
+]
+
+[[package]]
+name = "peer-monitoring-service-server"
+version = "0.1.0"
+dependencies = [
+ "aptos-config",
+ "aptos-logger",
+ "aptos-metrics-core",
+ "aptos-types",
+ "aptos-workspace-hack",
+ "bcs",
+ "bounded-executor",
+ "bytes",
+ "channel",
+ "claim",
+ "futures",
+ "netcore",
+ "network",
+ "once_cell",
+ "peer-monitoring-service-types",
+ "serde 1.0.137",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "peer-monitoring-service-types"
+version = "0.1.0"
+dependencies = [
+ "aptos-config",
+ "aptos-workspace-hack",
+ "network",
+ "serde 1.0.137",
+ "thiserror",
+]
 
 [[package]]
 name = "pem"
@@ -5862,9 +6266,9 @@ checksum = "99b8db626e31e5b81787b9783425769681b347011cc59471e33ea46d2ea0cf55"
 dependencies = [
  "pest",
  "pest_meta",
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
- "syn 1.0.92",
+ "syn 1.0.95",
 ]
 
 [[package]]
@@ -5924,7 +6328,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d5285893bb5eb82e6aaf5d59ee909a06a16737a8970984dd7746ba9283498d6"
 dependencies = [
  "phf_shared",
- "rand 0.8.4",
+ "rand 0.8.5",
 ]
 
 [[package]]
@@ -5952,9 +6356,9 @@ version = "1.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "744b6f092ba29c3650faf274db506afd39944f48420f6c86b17cfe0ee1cb36bb"
 dependencies = [
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
- "syn 1.0.92",
+ "syn 1.0.95",
 ]
 
 [[package]]
@@ -6004,6 +6408,96 @@ dependencies = [
 ]
 
 [[package]]
+name = "poem"
+version = "1.3.31"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "61fc6256b0e7050d11d3ac5d8109eb87c7939189ecc80228c92b6cb00f29dd87"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bytes",
+ "chrono",
+ "cookie 0.16.0",
+ "futures-util",
+ "headers",
+ "http",
+ "hyper",
+ "mime",
+ "multer",
+ "parking_lot 0.12.0",
+ "percent-encoding",
+ "pin-project-lite",
+ "poem-derive",
+ "regex",
+ "serde 1.0.137",
+ "serde_json",
+ "serde_urlencoded 0.7.1",
+ "smallvec",
+ "tempfile",
+ "thiserror",
+ "time 0.3.9",
+ "tokio",
+ "tokio-stream",
+ "tokio-util 0.7.2",
+ "tracing",
+]
+
+[[package]]
+name = "poem-derive"
+version = "1.3.31"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb23ee18a9b915a04d1ee2e7dc6aa77e1e50e067c0aba2b25b623af2b1f5cf2d"
+dependencies = [
+ "proc-macro-crate",
+ "proc-macro2 1.0.39",
+ "quote 1.0.18",
+ "syn 1.0.95",
+]
+
+[[package]]
+name = "poem-openapi"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9763db3864695e75763cd4df7d91e6ece663e8cb6cd28466ed83f3bb2218503f"
+dependencies = [
+ "base64",
+ "bytes",
+ "derive_more",
+ "futures-util",
+ "mime",
+ "num-traits 0.2.15",
+ "poem",
+ "poem-openapi-derive",
+ "regex",
+ "serde 1.0.137",
+ "serde_json",
+ "serde_urlencoded 0.7.1",
+ "serde_yaml",
+ "thiserror",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "poem-openapi-derive"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "66c7322903b05cfa23434e8915a52f32f162d7d2b55b1282b392346854d0c19b"
+dependencies = [
+ "Inflector",
+ "darling",
+ "http",
+ "indexmap",
+ "mime",
+ "proc-macro-crate",
+ "proc-macro2 1.0.39",
+ "quote 1.0.18",
+ "regex",
+ "syn 1.0.95",
+ "thiserror",
+]
+
+[[package]]
 name = "polyval"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6023,9 +6517,9 @@ checksum = "eb9f9e6e233e5c4a35559a617bf40a4ec447db2e84c20b55a6f83167b7e57872"
 
 [[package]]
 name = "pq-sys"
-version = "0.4.6"
+version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ac25eee5a0582f45a67e837e350d784e7003bd29a5f460796772061ca49ffda"
+checksum = "4dfb5e575ef93a1b7b2a381d47ba7c5d4e4f73bff37cee932195de769aad9a54"
 dependencies = [
  "vcpkg",
 ]
@@ -6071,15 +6565,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "proc-macro-crate"
+version = "1.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e17d47ce914bf4de440332250b0edd23ce48c005f59fab39d3335866b114f11a"
+dependencies = [
+ "thiserror",
+ "toml",
+]
+
+[[package]]
 name = "proc-macro-error"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da25490ff9892aab3fcf7c36f08cfb902dd3e71ca0f9f9517bea02a73a5ce38c"
 dependencies = [
  "proc-macro-error-attr",
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
- "syn 1.0.92",
+ "syn 1.0.95",
  "version_check",
 ]
 
@@ -6089,7 +6593,7 @@ version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1be40180e52ecc98ad80b184934baf3d0d29f979574e439af5a55274b35f869"
 dependencies = [
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
  "version_check",
 ]
@@ -6099,12 +6603,6 @@ name = "proc-macro-hack"
 version = "0.5.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dbf0c48bc1d91375ae5c3cd81e3722dff1abcf81a30960240640d223f59fe0e5"
-
-[[package]]
-name = "proc-macro-nested"
-version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc881b2c22681370c6a780e47af9840ef841837bc98118431d4e1868bd0c1086"
 
 [[package]]
 name = "proc-macro2"
@@ -6117,11 +6615,11 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.38"
+version = "1.0.39"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9027b48e9d4c9175fa2218adf3557f91c1137021739951d4932f5f8268ac48aa"
+checksum = "c54b25569025b7fc9651de43004ae593a75ad88543b17178aa5e1b9c4f15f56f"
 dependencies = [
- "unicode-xid 0.2.3",
+ "unicode-ident",
 ]
 
 [[package]]
@@ -6139,6 +6637,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "prometheus-parse"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c996f3caea1c51aa034c0d2dfd8447a12c555f4567b02677ef8a865ac4cce712"
+dependencies = [
+ "chrono",
+ "lazy_static 1.4.0",
+ "regex",
+]
+
+[[package]]
 name = "proptest"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6150,7 +6659,7 @@ dependencies = [
  "lazy_static 1.4.0",
  "num-traits 0.2.15",
  "quick-error 2.0.1",
- "rand 0.8.4",
+ "rand 0.8.5",
  "rand_chacha 0.3.1",
  "rand_xorshift",
  "regex-syntax",
@@ -6267,7 +6776,7 @@ version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1feb54ed693b93a84e14094943b84b7c4eae204c512b7ccb95ab0c66d278ad1"
 dependencies = [
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
 ]
 
 [[package]]
@@ -6297,19 +6806,19 @@ dependencies = [
  "libc",
  "rand_chacha 0.2.2",
  "rand_core 0.5.1",
- "rand_hc 0.2.0",
+ "rand_hc",
+ "rand_pcg",
 ]
 
 [[package]]
 name = "rand"
-version = "0.8.4"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e7573632e6454cf6b99d7aac4ccca54be06da05aca2ef7423d22d27d4d4bcd8"
+checksum = "34af8d1a0e25924bc5b7c43c079c942339d8f0a8b57c39049bef581b46327404"
 dependencies = [
  "libc",
  "rand_chacha 0.3.1",
  "rand_core 0.6.3",
- "rand_hc 0.3.1",
 ]
 
 [[package]]
@@ -6360,12 +6869,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "rand_hc"
-version = "0.3.1"
+name = "rand_pcg"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d51e9f596de227fda2ea6c84607f5558e196eeaf43c986b724ba4fb8fdf497e7"
+checksum = "16abd0c1b639e9eb4d7c50c0b8100b0d0f849be2349829c740fe8e6eb4816429"
 dependencies = [
- "rand_core 0.6.3",
+ "rand_core 0.5.1",
 ]
 
 [[package]]
@@ -6388,9 +6897,9 @@ dependencies = [
 
 [[package]]
 name = "rayon"
-version = "1.5.2"
+version = "1.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd249e82c21598a9a426a4e00dd7adc1d640b22445ec8545feef801d1a74c221"
+checksum = "bd99e5772ead8baa5215278c9b15bf92087709e9c1b2d1f97cdb5a183c933a7d"
 dependencies = [
  "autocfg",
  "crossbeam-deque",
@@ -6400,9 +6909,9 @@ dependencies = [
 
 [[package]]
 name = "rayon-core"
-version = "1.9.2"
+version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f51245e1e62e1f1629cbfec37b5793bbabcaeb90f30e94d2ba03564687353e4"
+checksum = "258bcdb5ac6dad48491bb2992db6b7cf74878b0384908af124823d118c99683f"
 dependencies = [
  "crossbeam-channel",
  "crossbeam-deque",
@@ -6413,12 +6922,12 @@ dependencies = [
 [[package]]
 name = "read-write-set"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "anyhow",
  "move-binary-format",
  "move-bytecode-utils",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3)",
+ "move-core-types",
  "move-model",
  "move-read-write-set-types",
  "move-stackless-bytecode",
@@ -6428,12 +6937,12 @@ dependencies = [
 [[package]]
 name = "read-write-set-dynamic"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3#f2e7585b1ed5bd2810163d6bdebafe5a388881d3"
+source = "git+https://github.com/move-language/move?rev=ece13ae276e3925111bf48cd85b73af4287210e7#ece13ae276e3925111bf48cd85b73af4287210e7"
 dependencies = [
  "anyhow",
  "move-binary-format",
  "move-bytecode-utils",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=f2e7585b1ed5bd2810163d6bdebafe5a388881d3)",
+ "move-core-types",
  "move-read-write-set-types",
 ]
 
@@ -6487,9 +6996,9 @@ version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a043824e29c94169374ac5183ac0ed43f5724dc4556b19568007486bd840fa1f"
 dependencies = [
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
- "syn 1.0.92",
+ "syn 1.0.95",
 ]
 
 [[package]]
@@ -6532,7 +7041,7 @@ checksum = "46a1f7aa4f35e5e8b4160449f51afc758f0ce6454315a9fa7d0d113e958c41eb"
 dependencies = [
  "base64",
  "bytes",
- "cookie",
+ "cookie 0.15.1",
  "cookie_store",
  "encoding_rs",
  "futures-core",
@@ -6547,6 +7056,7 @@ dependencies = [
  "lazy_static 1.4.0",
  "log",
  "mime",
+ "mime_guess",
  "native-tls",
  "percent-encoding",
  "pin-project-lite",
@@ -6556,12 +7066,59 @@ dependencies = [
  "serde_urlencoded 0.7.1",
  "tokio",
  "tokio-native-tls",
- "tokio-util 0.6.9",
+ "tokio-util 0.6.10",
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
  "winreg",
+]
+
+[[package]]
+name = "reqwest-middleware"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69539cea4148dce683bec9dc95be3f0397a9bb2c248a49c8296a9d21659a8cdd"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "futures",
+ "http",
+ "reqwest",
+ "serde 1.0.137",
+ "task-local-extensions",
+ "thiserror",
+]
+
+[[package]]
+name = "reqwest-retry"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce246a729eaa6aff5e215aee42845bf5fed9893cc6cd51aeeb712f34e04dd9f3"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "futures",
+ "http",
+ "hyper",
+ "reqwest",
+ "reqwest-middleware",
+ "retry-policies",
+ "task-local-extensions",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "retry-policies"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47f9e19b18c6cdd796cc70aea8a9ea5ee7b813be611c6589e3624fcdbfd05f9d"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "rand 0.8.5",
 ]
 
 [[package]]
@@ -6573,7 +7130,7 @@ dependencies = [
  "cc",
  "libc",
  "once_cell",
- "spin",
+ "spin 0.5.2",
  "untrusted",
  "web-sys",
  "winapi 0.3.9",
@@ -6668,7 +7225,7 @@ dependencies = [
  "bytes",
  "futures",
  "hex",
- "hmac",
+ "hmac 0.10.1",
  "http",
  "hyper",
  "log",
@@ -6678,7 +7235,7 @@ dependencies = [
  "rusoto_credential",
  "rustc_version 0.2.3",
  "serde 1.0.137",
- "sha2",
+ "sha2 0.9.9",
  "time 0.2.27",
  "tokio",
 ]
@@ -6767,9 +7324,9 @@ dependencies = [
 
 [[package]]
 name = "ryu"
-version = "1.0.9"
+version = "1.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73b4b750c782965c211b42f022f59af1fbceabdd026623714f104152f1ec149f"
+checksum = "f3f6f92acf49d1b98f7a81226834412ada05458b7364277387724a237f062695"
 
 [[package]]
 name = "safemem"
@@ -6799,7 +7356,7 @@ dependencies = [
  "criterion",
  "once_cell",
  "proptest",
- "rand 0.8.4",
+ "rand 0.7.3",
  "rusty-fork",
  "serde 1.0.137",
  "serde_json",
@@ -6818,12 +7375,12 @@ dependencies = [
 
 [[package]]
 name = "schannel"
-version = "0.1.19"
+version = "0.1.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f05ba609c234e60bee0d547fe94a4c7e9da733d1c962cf6e59efa4cd9c8bc75"
+checksum = "88d6731146462ea25d9244b2ed5fd1d716d25c52e4d54aa4fb0f3c4e9854dbe2"
 dependencies = [
  "lazy_static 1.4.0",
- "winapi 0.3.9",
+ "windows-sys",
 ]
 
 [[package]]
@@ -6840,9 +7397,8 @@ name = "schemadb"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aptos-config",
  "aptos-logger",
- "aptos-metrics",
+ "aptos-metrics-core",
  "aptos-temppath",
  "aptos-workspace-hack",
  "byteorder",
@@ -6869,16 +7425,15 @@ version = "0.1.0"
 dependencies = [
  "aptos-crypto",
  "aptos-infallible",
- "aptos-metrics",
+ "aptos-metrics-core",
  "aptos-types",
  "aptos-workspace-hack",
- "arc-swap",
  "bitvec",
  "criterion",
  "itertools",
  "once_cell",
  "proptest",
- "rand 0.8.4",
+ "rand 0.7.3",
  "rayon",
  "storage-interface",
  "thiserror",
@@ -6931,7 +7486,7 @@ dependencies = [
  "aptos-workspace-hack",
  "bcs",
  "hex",
- "rand 0.8.4",
+ "rand 0.7.3",
  "serde_yaml",
  "structopt",
  "thiserror",
@@ -7074,9 +7629,9 @@ version = "1.0.137"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f26faba0c3959972377d3b2d306ee9f71faee9714294e41bb777f83f88578be"
 dependencies = [
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
- "syn 1.0.92",
+ "syn 1.0.95",
 ]
 
 [[package]]
@@ -7086,7 +7641,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b7ce2b32a1aed03c558dc61a5cd328f15aff2dbc17daad8fb8af04d2100e15c"
 dependencies = [
  "indexmap",
- "itoa 1.0.1",
+ "itoa 1.0.2",
  "ryu",
  "serde 1.0.137",
 ]
@@ -7110,7 +7665,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3491c14715ca2294c4d6a88f15e84739788c1d030eed8c110436aafdaa2f3fd"
 dependencies = [
  "form_urlencoded",
- "itoa 1.0.1",
+ "itoa 1.0.2",
  "ryu",
  "serde 1.0.137",
 ]
@@ -7145,10 +7700,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2881bccd7d60fb32dfa3d7b3136385312f8ad75e2674aab2852867a09790cae8"
 dependencies = [
  "proc-macro-error",
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
  "rustversion",
- "syn 1.0.92",
+ "syn 1.0.95",
 ]
 
 [[package]]
@@ -7213,6 +7768,17 @@ dependencies = [
  "cpufeatures",
  "digest 0.9.0",
  "opaque-debug 0.3.0",
+]
+
+[[package]]
+name = "sha2"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "55deaec60f81eefe3cce0dc50bda92d6d8e88f2a27df7c5033b42afeb1ed2676"
+dependencies = [
+ "cfg-if 1.0.0",
+ "cpufeatures",
+ "digest 0.10.3",
 ]
 
 [[package]]
@@ -7285,9 +7851,9 @@ dependencies = [
 
 [[package]]
 name = "signal-hook"
-version = "0.3.13"
+version = "0.3.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "647c97df271007dcea485bb74ffdb57f2e683f1306c854f468a0c244badabf2d"
+checksum = "a253b5e89e2698464fc26b545c9edceb338e18a89effeeecfea192c3025be29d"
 dependencies = [
  "libc",
  "signal-hook-registry",
@@ -7381,7 +7947,8 @@ dependencies = [
  "aptos",
  "aptos-config",
  "aptos-crypto",
- "aptos-genesis-tool",
+ "aptos-faucet",
+ "aptos-genesis",
  "aptos-global-constants",
  "aptos-indexer",
  "aptos-infallible",
@@ -7389,6 +7956,7 @@ dependencies = [
  "aptos-management",
  "aptos-operational-tool",
  "aptos-rest-client",
+ "aptos-rosetta",
  "aptos-sdk",
  "aptos-secure-storage",
  "aptos-temppath",
@@ -7411,7 +7979,7 @@ dependencies = [
  "move-deps",
  "once_cell",
  "proptest",
- "rand 0.8.4",
+ "rand 0.7.3",
  "regex",
  "reqwest",
  "serde_json",
@@ -7434,6 +8002,12 @@ name = "spin"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
+
+[[package]]
+name = "spin"
+version = "0.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c530c2b0d0bf8b69304b39fe2001993e267461948b890cd037d8ad4293fa1a0d"
 
 [[package]]
 name = "stable_deref_trait"
@@ -7460,7 +8034,7 @@ dependencies = [
  "aptos-data-client",
  "aptos-infallible",
  "aptos-logger",
- "aptos-metrics",
+ "aptos-metrics-core",
  "aptos-temppath",
  "aptos-time-service",
  "aptos-types",
@@ -7500,7 +8074,7 @@ dependencies = [
  "aptos-config",
  "aptos-crypto",
  "aptos-data-client",
- "aptos-genesis-tool",
+ "aptos-genesis",
  "aptos-infallible",
  "aptos-temppath",
  "aptos-time-service",
@@ -7530,11 +8104,11 @@ version = "0.1.0"
 dependencies = [
  "aptos-config",
  "aptos-crypto",
- "aptos-genesis-tool",
+ "aptos-genesis",
  "aptos-infallible",
  "aptos-logger",
  "aptos-mempool",
- "aptos-metrics",
+ "aptos-metrics-core",
  "aptos-proptest-helpers",
  "aptos-temppath",
  "aptos-time-service",
@@ -7564,11 +8138,10 @@ dependencies = [
  "network-builder",
  "once_cell",
  "proptest",
- "rand 0.8.4",
+ "rand 0.7.3",
  "serde 1.0.137",
  "short-hex-str",
  "storage-interface",
- "storage-service",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -7607,11 +8180,11 @@ version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c87a60a40fccc84bef0652345bbbbbe20a605bf5d0ce81719fc476f5c03b50ef"
 dependencies = [
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
  "serde 1.0.137",
  "serde_derive",
- "syn 1.0.92",
+ "syn 1.0.95",
 ]
 
 [[package]]
@@ -7621,13 +8194,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "58fa5ff6ad0d98d1ffa8cb115892b6e69d67799f6763e162a1c9db421dc22e11"
 dependencies = [
  "base-x",
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
  "serde 1.0.137",
  "serde_derive",
  "serde_json",
  "sha1",
- "syn 1.0.92",
+ "syn 1.0.95",
 ]
 
 [[package]]
@@ -7635,22 +8208,6 @@ name = "stdweb-internal-runtime"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "213701ba3370744dcd1a12960caa4843b3d68b4d1c0a5d575e0d65b2ee9d16c0"
-
-[[package]]
-name = "storage-client"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "aptos-crypto",
- "aptos-infallible",
- "aptos-logger",
- "aptos-secure-net",
- "aptos-types",
- "aptos-workspace-hack",
- "bcs",
- "serde 1.0.137",
- "storage-interface",
-]
 
 [[package]]
 name = "storage-interface"
@@ -7668,28 +8225,6 @@ dependencies = [
  "scratchpad",
  "serde 1.0.137",
  "thiserror",
-]
-
-[[package]]
-name = "storage-service"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "aptos-config",
- "aptos-crypto",
- "aptos-logger",
- "aptos-metrics",
- "aptos-secure-net",
- "aptos-temppath",
- "aptos-types",
- "aptos-workspace-hack",
- "aptosdb",
- "bcs",
- "itertools",
- "proptest",
- "rand 0.8.4",
- "storage-client",
- "storage-interface",
 ]
 
 [[package]]
@@ -7715,7 +8250,7 @@ dependencies = [
  "aptos-crypto",
  "aptos-infallible",
  "aptos-logger",
- "aptos-metrics",
+ "aptos-metrics-core",
  "aptos-time-service",
  "aptos-types",
  "aptos-workspace-hack",
@@ -7792,9 +8327,9 @@ checksum = "dcb5ae327f9cc13b68763b5749770cb9e048a99bd9dfdfa58d0cf05d5f64afe0"
 dependencies = [
  "heck 0.3.3",
  "proc-macro-error",
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
- "syn 1.0.92",
+ "syn 1.0.95",
 ]
 
 [[package]]
@@ -7826,13 +8361,13 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "1.0.92"
+version = "1.0.95"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ff7c592601f11445996a06f8ad0c27f094a58857c2f89e97974ab9235b92c52"
+checksum = "fbaf6116ab8924f39d52792136fb74fd60a80194cf1b1c6ffa6453eef1c3f942"
 dependencies = [
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
- "unicode-xid 0.2.3",
+ "unicode-ident",
 ]
 
 [[package]]
@@ -7841,17 +8376,17 @@ version = "0.12.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f36bdaa60a83aca3921b5259d5400cbf5e90fc51931376a9bd4a0eb79aa7210f"
 dependencies = [
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
- "syn 1.0.92",
+ "syn 1.0.95",
  "unicode-xid 0.2.3",
 ]
 
 [[package]]
 name = "sysinfo"
-version = "0.23.11"
+version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3bf915673a340ee41f2fc24ad1286c75ea92026f04b65a0d0e5132d80b95fc61"
+checksum = "9a2809487b962344ca55d9aea565f9ffbcb6929780802217acc82561f6746770"
 dependencies = [
  "cfg-if 1.0.0",
  "core-foundation-sys",
@@ -7897,6 +8432,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "task-local-extensions"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "36794203e10c86e5998179e260869d156e0674f02d5451b4a3fb9fd86d02aaab"
+dependencies = [
+ "tokio",
+]
+
+[[package]]
 name = "tempfile"
 version = "3.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7924,7 +8468,7 @@ dependencies = [
  "percent-encoding",
  "pest",
  "pest_derive",
- "rand 0.8.4",
+ "rand 0.8.5",
  "regex",
  "serde 1.0.137",
  "serde_json",
@@ -7980,7 +8524,7 @@ dependencies = [
  "aptos-sdk",
  "aptos-workspace-hack",
  "forge",
- "rand 0.8.4",
+ "rand 0.7.3",
  "tokio",
 ]
 
@@ -8029,9 +8573,9 @@ version = "1.0.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0396bc89e626244658bef819e22d0cc459e795a5ebe878e6ec336d1674a8d79a"
 dependencies = [
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
- "syn 1.0.92",
+ "syn 1.0.95",
 ]
 
 [[package]]
@@ -8041,6 +8585,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5516c27b78311c50bf42c071425c560ac799b11c30b31f87e3081965fe5e0180"
 dependencies = [
  "once_cell",
+]
+
+[[package]]
+name = "threadpool"
+version = "1.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d050e60b33d41c19108b32cea32164033a9013fe3b46cbd4457559bfbf77afaa"
+dependencies = [
+ "num_cpus",
 ]
 
 [[package]]
@@ -8064,9 +8617,21 @@ dependencies = [
  "libc",
  "standback",
  "stdweb",
- "time-macros",
+ "time-macros 0.1.1",
  "version_check",
  "winapi 0.3.9",
+]
+
+[[package]]
+name = "time"
+version = "0.3.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c2702e08a7a860f005826c6815dcac101b19b5eb330c27fe4a5928fec1d20ddd"
+dependencies = [
+ "itoa 1.0.2",
+ "libc",
+ "num_threads",
+ "time-macros 0.2.4",
 ]
 
 [[package]]
@@ -8080,16 +8645,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "time-macros"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42657b1a6f4d817cda8e7a0ace261fe0cc946cf3a80314390b22cc61ae080792"
+
+[[package]]
 name = "time-macros-impl"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd3c141a1b43194f3f56a1411225df8646c55781d5f26db825b3d98507eb482f"
 dependencies = [
  "proc-macro-hack",
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
  "standback",
- "syn 1.0.92",
+ "syn 1.0.95",
 ]
 
 [[package]]
@@ -8137,14 +8708,14 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.18.1"
+version = "1.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dce653fb475565de9f6fb0614b28bca8df2c430c0cf84bcd9c843f15de5414cc"
+checksum = "4903bf0427cf68dddd5aa6a93220756f8be0c34fcfa9f5e6191e103e15a31395"
 dependencies = [
  "bytes",
  "libc",
  "memchr",
- "mio 0.8.2",
+ "mio 0.8.3",
  "num_cpus",
  "once_cell",
  "parking_lot 0.12.0",
@@ -8171,9 +8742,9 @@ version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b557f72f448c511a979e2564e55d74e6c4432fc96ff4f6241bc6bded342643b7"
 dependencies = [
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
- "syn 1.0.92",
+ "syn 1.0.95",
 ]
 
 [[package]]
@@ -8193,7 +8764,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f57eb36ecbe0fc510036adff84824dd3c24bb781e21bfa67b69d556aa85214f"
 dependencies = [
  "pin-project",
- "rand 0.8.4",
+ "rand 0.8.5",
  "tokio",
 ]
 
@@ -8247,13 +8818,12 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
-version = "0.6.9"
+version = "0.6.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e99e1983e5d376cd8eb4b66604d2e99e79f5bd988c3055891dcd8c9e2604cc0"
+checksum = "36943ee01a6d67977dd3f84a5a1d2efeb4ada3a1ae771cadfaa535d9d9fc6507"
 dependencies = [
  "bytes",
  "futures-core",
- "futures-io",
  "futures-sink",
  "log",
  "pin-project-lite",
@@ -8262,12 +8832,13 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
-version = "0.7.1"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0edfdeb067411dba2044da6d1cb2df793dd35add7888d73c16e3381ded401764"
+checksum = "f988a1a1adc2fb21f9c12aa96441da33a1728193ae0b95d2be22dbd17fcb4e5c"
 dependencies = [
  "bytes",
  "futures-core",
+ "futures-io",
  "futures-sink",
  "pin-project-lite",
  "tokio",
@@ -8307,7 +8878,7 @@ dependencies = [
  "pin-project",
  "pin-project-lite",
  "tokio",
- "tokio-util 0.7.1",
+ "tokio-util 0.7.2",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -8344,9 +8915,9 @@ version = "0.1.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cc6b8ad3567499f98a1db7a752b07a7c8c7c7c34c332ec00effb2b0027974b7c"
 dependencies = [
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
- "syn 1.0.92",
+ "syn 1.0.95",
 ]
 
 [[package]]
@@ -8410,6 +8981,24 @@ name = "transaction-emitter"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "aptos-logger",
+ "aptos-sdk",
+ "aptos-workspace-hack",
+ "clap 3.1.18",
+ "futures",
+ "itertools",
+ "rand 0.7.3",
+ "rand_core 0.5.1",
+ "termion",
+ "tokio",
+ "transaction-emitter-lib",
+]
+
+[[package]]
+name = "transaction-emitter-lib"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
  "aptos",
  "aptos-config",
  "aptos-crypto",
@@ -8418,14 +9007,16 @@ dependencies = [
  "aptos-sdk",
  "aptos-transaction-builder",
  "aptos-workspace-hack",
+ "clap 3.1.18",
  "futures",
  "itertools",
- "rand 0.8.4",
- "rand_core 0.6.3",
+ "rand 0.7.3",
+ "rand_core 0.5.1",
  "reqwest",
- "structopt",
+ "serde 1.0.137",
  "termion",
  "tokio",
+ "url",
 ]
 
 [[package]]
@@ -8474,7 +9065,7 @@ dependencies = [
  "http",
  "httparse",
  "log",
- "rand 0.8.4",
+ "rand 0.8.5",
  "sha-1 0.9.8",
  "thiserror",
  "url",
@@ -8520,9 +9111,9 @@ checksum = "56dee185309b50d1f11bfedef0fe6d036842e3fb77413abef29f8f8d1c5d4c1c"
 
 [[package]]
 name = "uncased"
-version = "0.9.6"
+version = "0.9.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5baeed7327e25054889b9bd4f975f32e5f4c5d434042d59ab6cd4142c0a76ed0"
+checksum = "09b01702b0fd0b3fadcf98e098780badda8742d4f4a7676615cad90e8ac73622"
 dependencies = [
  "version_check",
 ]
@@ -8591,6 +9182,12 @@ name = "unicode-bidi"
 version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "099b7128301d285f79ddd55b9a83d5e6b9e97c92e0ea0daebee7263e932de992"
+
+[[package]]
+name = "unicode-ident"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d22af068fba1eb5edcb4aea19d382b2a3deb4c8f9d475c589b6ada9e0fd493ee"
 
 [[package]]
 name = "unicode-linebreak"
@@ -8677,6 +9274,7 @@ dependencies = [
  "idna",
  "matches",
  "percent-encoding",
+ "serde 1.0.137",
 ]
 
 [[package]]
@@ -8714,7 +9312,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aae2faf80ac463422992abf4de234731279c058aaf33171ca70277c98406b124"
 dependencies = [
  "quote 1.0.18",
- "syn 1.0.92",
+ "syn 1.0.95",
 ]
 
 [[package]]
@@ -8744,7 +9342,6 @@ dependencies = [
  "aptos-crypto",
  "aptos-proptest-helpers",
  "aptos-state-view",
- "aptos-transaction-builder",
  "aptos-types",
  "aptos-vm",
  "aptos-workspace-hack",
@@ -8755,7 +9352,7 @@ dependencies = [
  "once_cell",
  "proptest",
  "proptest-derive",
- "rand 0.8.4",
+ "rand 0.7.3",
 ]
 
 [[package]]
@@ -8775,7 +9372,7 @@ dependencies = [
  "executor-test-helpers",
  "fail 0.5.0",
  "move-deps",
- "rand 0.8.4",
+ "rand 0.7.3",
  "storage-interface",
  "vm-genesis",
 ]
@@ -8797,7 +9394,7 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d257817081c7dffcdbab24b9e62d2def62e2ff7d00b1c20062551e6cccc145ff"
 dependencies = [
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
 ]
 
@@ -8857,7 +9454,7 @@ dependencies = [
  "tokio-rustls",
  "tokio-stream",
  "tokio-tungstenite",
- "tokio-util 0.6.9",
+ "tokio-util 0.6.10",
  "tower-service",
  "tracing",
 ]
@@ -8899,9 +9496,9 @@ dependencies = [
  "bumpalo",
  "lazy_static 1.4.0",
  "log",
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
- "syn 1.0.92",
+ "syn 1.0.95",
  "wasm-bindgen-shared",
 ]
 
@@ -8933,9 +9530,9 @@ version = "0.2.80"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "99ec0dc7a4756fffc231aab1b9f2f578d23cd391390ab27f952ae0c9b3ece20b"
 dependencies = [
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
- "syn 1.0.92",
+ "syn 1.0.95",
  "wasm-bindgen-backend",
  "wasm-bindgen-shared",
 ]
@@ -9136,12 +9733,12 @@ dependencies = [
 
 [[package]]
 name = "x25519-dalek"
-version = "2.0.0-pre.1"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5da623d8af10a62342bcbbb230e33e58a63255a58012f8653c578e54bab48df"
+checksum = "2392b6b94a576b4e2bf3c5b2757d63f10ada8020a2e4d08ac849ebcf6ea8e077"
 dependencies = [
  "curve25519-dalek",
- "rand_core 0.6.3",
+ "rand_core 0.5.1",
  "zeroize",
 ]
 
@@ -9162,21 +9759,21 @@ dependencies = [
 
 [[package]]
 name = "zeroize"
-version = "1.5.5"
+version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94693807d016b2f2d2e14420eb3bfcca689311ff775dcf113d74ea624b7cdf07"
+checksum = "4756f7db3f7b5574938c3eb1c117038b8e07f95ee6718c0efad4ac21508f1efd"
 dependencies = [
  "zeroize_derive",
 ]
 
 [[package]]
 name = "zeroize_derive"
-version = "1.3.2"
+version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f8f187641dad4f680d25c4bfc4225b418165984179f26ca76ec4fb6441d3a17"
+checksum = "4eb56561c1f8f5441784ea91f52ae8b44268d920f2a59121968fec9297fa7157"
 dependencies = [
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.39",
  "quote 1.0.18",
- "syn 1.0.92",
+ "syn 1.0.95",
  "synstructure",
 ]

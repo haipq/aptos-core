@@ -13,7 +13,7 @@ use crate::{
     node_type::{Child, InternalNode, Node, NodeKey},
     TreeReader,
 };
-use anyhow::{bail, ensure, format_err, Result};
+use anyhow::{bail, ensure, Result};
 use aptos_crypto::HashValue;
 use aptos_types::{
     nibble::{nibble_path::NibblePath, Nibble, ROOT_NIBBLE_HEIGHT},
@@ -94,7 +94,7 @@ impl NodeVisitInfo {
 }
 
 /// The `JellyfishMerkleIterator` implementation.
-pub struct JellyfishMerkleIterator<R, V> {
+pub struct JellyfishMerkleIterator<R, K> {
     /// The storage engine from which we can read nodes using node keys.
     reader: Arc<R>,
 
@@ -109,13 +109,13 @@ pub struct JellyfishMerkleIterator<R, V> {
     /// additional bit.
     done: bool,
 
-    phantom_value: PhantomData<V>,
+    phantom_value: PhantomData<K>,
 }
 
-impl<R, V> JellyfishMerkleIterator<R, V>
+impl<R, K> JellyfishMerkleIterator<R, K>
 where
-    R: TreeReader<V>,
-    V: crate::Value,
+    R: TreeReader<K>,
+    K: crate::Key,
 {
     /// Constructs a new iterator. This puts the internal state in the correct position, so the
     /// following `next` call will yield the smallest key that is greater or equal to
@@ -177,7 +177,6 @@ where
                     }
                 }
             }
-            Node::Null => done = true,
         }
 
         Ok(Self {
@@ -220,9 +219,6 @@ where
         let mut leaves_skipped = 0;
         for _ in 0..=ROOT_NIBBLE_HEIGHT {
             match current_node {
-                Node::Null => {
-                    unreachable!("The Node::Null case has already been covered before loop.")
-                }
                 Node::Leaf(_) => {
                     ensure!(
                         leaves_skipped == start_idx,
@@ -273,12 +269,12 @@ where
     }
 }
 
-impl<R, V> Iterator for JellyfishMerkleIterator<R, V>
+impl<R, K> Iterator for JellyfishMerkleIterator<R, K>
 where
-    R: TreeReader<V>,
-    V: crate::Value,
+    R: TreeReader<K>,
+    K: crate::Key,
 {
-    type Item = Result<(HashValue, V)>;
+    type Item = Result<(HashValue, (K, Version))>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.done {
@@ -294,14 +290,16 @@ where
                     // true in `new`). Return the node and mark `self.done` so next time we return
                     // None.
                     self.done = true;
-                    return Some(Ok((leaf_node.account_key(), leaf_node.value().clone())));
+                    return Some(Ok((
+                        leaf_node.account_key(),
+                        leaf_node.value_index().clone(),
+                    )));
                 }
                 Ok(Node::Internal(_)) => {
                     // This means `starting_key` is bigger than every key in this tree, or we have
                     // iterated past the last key.
                     return None;
                 }
-                Ok(Node::Null) => unreachable!("We would have set done to true in new."),
                 Err(err) => return Some(Err(err)),
             }
         }
@@ -327,11 +325,10 @@ where
                     self.parent_stack.push(visit_info);
                 }
                 Ok(Node::Leaf(leaf_node)) => {
-                    let ret = (leaf_node.account_key(), leaf_node.value().clone());
+                    let ret = (leaf_node.account_key(), leaf_node.value_index().clone());
                     Self::cleanup_stack(&mut self.parent_stack);
                     return Some(Ok(ret));
                 }
-                Ok(Node::Null) => return Some(Err(format_err!("Should not reach a null node."))),
                 Err(err) => return Some(Err(err)),
             }
         }

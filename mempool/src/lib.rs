@@ -60,14 +60,14 @@ mod tests;
 pub use shared_mempool::{
     bootstrap, network,
     types::{
-        ConsensusRequest, ConsensusResponse, MempoolClientRequest, MempoolClientSender,
-        MempoolEventsReceiver, SubmissionStatus, TransactionSummary,
+        MempoolClientRequest, MempoolClientSender, MempoolEventsReceiver, QuorumStoreRequest,
+        QuorumStoreResponse, SubmissionStatus,
     },
 };
 #[cfg(any(test, feature = "fuzzing"))]
 pub use tests::{fuzzing, mocks};
 
 mod core_mempool;
-mod counters;
+pub mod counters;
 mod logging;
 mod shared_mempool;

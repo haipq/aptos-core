@@ -23,7 +23,7 @@ The full source code for this tutorial is available [here](https://github.com/ap
 
 ### Aptos Wallet
 
-Before starting this tutorial, you should install the [Aptos Wallet extension](building-wallet-extension.md).
+Before starting this tutorial, you should install the [Aptos Wallet extension](../guides/building-wallet-extension.md).
 
 After you install it:
 
@@ -156,7 +156,7 @@ The Wallet is now integrated with our dapp. Next, we will integrate the Aptos SD
 First, add the SDK to the project's dependencies:
 
 ```console
-$ npm add --save aptos
+$ npm install --save aptos
 ```
 
 You will now see `"aptos": "^0.0.20"` (or similar) in your `package.json`.

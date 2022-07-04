@@ -51,12 +51,12 @@ resource "aws_db_instance" "indexer" {
 
 resource "kubernetes_secret" "indexer_credentials" {
   metadata {
-    name      = "indexer-credentials"
+    name      = "indexer-${local.workspace_name}-credentials"
     namespace = "default"
   }
 
   # TODO(rustielin): replace assumptions on db name
   data = {
-    pg_db_uri = "postgresql://${aws_db_instance.indexer.address}:5432/postgres?user=${aws_db_instance.indexer.username}&password=${var.db_password}"
+    pg_db_uri = "postgresql://${aws_db_instance.indexer.username}:${var.db_password}@${aws_db_instance.indexer.address}:5432/postgres"
   }
 }

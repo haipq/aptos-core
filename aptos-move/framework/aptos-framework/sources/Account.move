@@ -1,11 +1,13 @@
 module AptosFramework::Account {
     use Std::BCS;
     use Std::Errors;
+    use Std::GUID;
     use Std::Hash;
     use Std::Signer;
     use Std::Vector;
     use AptosFramework::ChainId;
-    use AptosFramework::TestCoin;
+    use AptosFramework::Coin;
+    use AptosFramework::TestCoin::TestCoin;
     use AptosFramework::Timestamp;
     use AptosFramework::TransactionFee;
     use AptosFramework::TransactionPublishingOption;
@@ -32,6 +34,8 @@ module AptosFramework::Account {
         writeset_epilogue_name: vector<u8>,
         currency_code_required: bool,
     }
+
+    struct SignerCapability has drop, store { account: address }
 
     const MAX_U64: u128 = 18446744073709551615;
 
@@ -69,6 +73,7 @@ module AptosFramework::Account {
     const PROLOGUE_ESEQUENCE_NUMBER_TOO_BIG: u64 = 1011;
     const PROLOGUE_ESECONDARY_KEYS_ADDRESSES_COUNT_MISMATCH: u64 = 1012;
 
+    native fun create_address(bytes: vector<u8>): address;
     native fun create_signer(addr: address): signer;
 
     public fun initialize(account: &signer,
@@ -109,14 +114,10 @@ module AptosFramework::Account {
         authentication_key
     }
 
-    /// Publishes a new `Account` resource under `new_address`.
-    /// A signer representing `new_address` is returned. This way, the caller of this function
-    /// can publish additional resources under `new_address`.
-    /// The `_witness` guarantees that owner the registered caller of this function can call it.
-    /// authentication key returned is `auth_key_prefix` | `fresh_address`.
-    public fun create_account_internal(
-        new_address: address,
-    ): (signer, vector<u8>) {
+    /// Publishes a new `Account` resource under `new_address`. A signer representing `new_address`
+    /// is returned. This way, the caller of this function can publish additional resources under
+    /// `new_address`.
+    public(friend) fun create_account_internal(new_address: address): signer {
         // there cannot be an Account resource under new_addr already.
         assert!(!exists<Account>(new_address), Errors::already_published(EACCOUNT));
         assert!(
@@ -131,7 +132,7 @@ module AptosFramework::Account {
         create_account_unchecked(new_address)
     }
 
-    fun create_account_unchecked(new_address: address): (signer, vector<u8>) {
+    fun create_account_unchecked(new_address: address): signer {
         let new_account = create_signer(new_address);
         let authentication_key = BCS::to_bytes(&new_address);
         assert!(
@@ -141,13 +142,13 @@ module AptosFramework::Account {
         move_to(
             &new_account,
             Account {
-                authentication_key: copy authentication_key,
+                authentication_key,
                 sequence_number: 0,
                 self_address: new_address,
             }
         );
 
-        (new_account, authentication_key)
+        new_account
     }
 
     public fun exists_at(addr: address): bool {
@@ -218,8 +219,8 @@ module AptosFramework::Account {
             Errors::invalid_argument(PROLOGUE_ESEQUENCE_NUMBER_TOO_NEW)
         );
         let max_transaction_fee = txn_gas_price * txn_max_gas_units;
-        assert!(TestCoin::exists_at(transaction_sender), Errors::invalid_argument(PROLOGUE_ECANT_PAY_GAS_DEPOSIT));
-        let balance = TestCoin::balance_of(transaction_sender);
+        assert!(Coin::is_account_registered<TestCoin>(transaction_sender), Errors::invalid_argument(PROLOGUE_ECANT_PAY_GAS_DEPOSIT));
+        let balance = Coin::balance<TestCoin>(transaction_sender);
         assert!(balance >= max_transaction_fee, Errors::invalid_argument(PROLOGUE_ECANT_PAY_GAS_DEPOSIT));
     }
 
@@ -326,9 +327,8 @@ module AptosFramework::Account {
         let addr = Signer::address_of(&account);
         // it's important to maintain the error code consistent with vm
         // to do failed transaction cleanup.
-        assert!(TestCoin::balance_of(addr) >= transaction_fee_amount, Errors::limit_exceeded(PROLOGUE_ECANT_PAY_GAS_DEPOSIT));
-        let coin = TestCoin::withdraw(&account, transaction_fee_amount);
-        TransactionFee::burn_fee(coin);
+        assert!(Coin::balance<TestCoin>(addr) >= transaction_fee_amount, Errors::limit_exceeded(PROLOGUE_ECANT_PAY_GAS_DEPOSIT));
+        TransactionFee::burn_fee(addr, transaction_fee_amount);
 
         let old_sequence_number = get_sequence_number(addr);
 
@@ -343,18 +343,134 @@ module AptosFramework::Account {
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    /// Basic account creation method.
+    /// Basic account creation methods.
     ///////////////////////////////////////////////////////////////////////////
 
     public(script) fun create_account(auth_key: address) {
-        let (signer, _) = create_account_internal(auth_key);
-        TestCoin::register(&signer);
+        let signer = create_account_internal(auth_key);
+        Coin::register<TestCoin>(&signer);
+    }
+
+    /// A resource account is used to manage resources independent of an account managed by a user.
+    /// Some applications might include managing a Dao and the resources associated with the Dao or
+    /// a liquidity pool to create new liquidity pool coins without requiring the original account
+    /// owner to setup the resources. While one could theoretically manage a lot of this via
+    /// capabilities, the `move_to` semantics insist on a signer and cannot work with capabilities
+    /// due to Move requirements that `move_to` be executed on a resource within the same module
+    /// that defines that resource.
+    ///
+    /// As a small example:
+    /// ```
+    /// let (signer, cap) = create_resource_account(&source);
+    /// let lp = LiquidityPool { signer_cap: cap, ... };
+    /// move_to(&signer, lp);
+    /// ```
+    ///
+    /// Later on during a coin registration:
+    /// ```
+    /// public fun add_coin<X, Y>(lp: &LP, x: Coin<x>, y: Coin<y>) {
+    ///     if(!exists<LiquidityCoin<X, Y>(LP::Address(lp), LiquidityCoin<X, Y>)) {
+    ///         let mint, burn = Coin::initialize<LiquidityCoin<X, Y>>(...);
+    ///         move_to(&create_signer_with_capability(&lp.cap), LiquidityCoin<X, Y>{ mint, burn });
+    ///     }
+    ///     ...
+    /// }
+    /// ```
+    public fun create_resource_account(
+        source: &signer,
+    ): (signer, SignerCapability) {
+        let guid = GUID::create(source);
+        let bytes = BCS::to_bytes(&guid);
+        Vector::append(&mut bytes, BCS::to_bytes(&Timestamp::now_microseconds()));
+        let addr = create_address(Hash::sha3_256(bytes));
+
+        let signer = create_account_internal(copy addr);
+        let signer_cap = SignerCapability { account: addr };
+        (signer, signer_cap)
     }
 
     /// Create the account for @AptosFramework to help module upgrades on testnet.
     public(friend) fun create_core_framework_account(): signer {
         Timestamp::assert_genesis();
-        let (signer, _) = create_account_unchecked(@AptosFramework);
-        signer
+        create_account_unchecked(@AptosFramework)
     }
+
+    ///////////////////////////////////////////////////////////////////////////
+    /// Capability based functions for efficient use.
+    ///////////////////////////////////////////////////////////////////////////
+
+    public fun create_signer_with_capability(capability: &SignerCapability): signer {
+        let addr = &capability.account;
+        create_signer(*addr)
+    }
+
+    #[test(core_resources = @CoreResources, user = @0x1)]
+    public(script) fun test_create_resource_account(
+        core_resources: signer,
+        user: signer,
+    ) {
+        Timestamp::set_time_has_started_for_testing(&core_resources);
+        let (resource_account, _) = create_resource_account(&user);
+        assert!(Signer::address_of(&resource_account) != Signer::address_of(&user), 0);
+        Coin::register<TestCoin>(&resource_account);
+    }
+
+    #[test_only]
+    struct DummyResource has key { }
+
+    #[test(core_resources = @CoreResources, user = @0x1)]
+    public(script) fun test_module_capability(
+        core_resources: signer,
+        user: signer,
+    ) acquires DummyResource {
+        Timestamp::set_time_has_started_for_testing(&core_resources);
+        let (resource_account, signer_cap) = create_resource_account(&user);
+        assert!(Signer::address_of(&resource_account) != Signer::address_of(&user), 0);
+
+        let resource_account_from_cap = create_signer_with_capability(&signer_cap);
+        assert!(&resource_account == &resource_account_from_cap, 1);
+        Coin::register<TestCoin>(&resource_account_from_cap);
+
+        move_to(&resource_account_from_cap, DummyResource { });
+        borrow_global<DummyResource>(Signer::address_of(&resource_account));
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    // Test-only sequence number mocking for extant Account resource
+    ///////////////////////////////////////////////////////////////////////////
+
+    #[test_only]
+    /// Increment sequence number of account at address `addr`
+    public fun increment_sequence_number(
+        addr: address,
+    ) acquires Account {
+        let acct = borrow_global_mut<Account>(addr);
+        acct.sequence_number = acct.sequence_number + 1;
+    }
+
+    #[test_only]
+    /// Update address `addr` to have `s` as its sequence number
+    public fun set_sequence_number(
+        addr: address,
+        s: u64
+    ) acquires Account {
+        borrow_global_mut<Account>(addr).sequence_number = s;
+    }
+
+    #[test]
+    /// Verify test-only sequence number mocking
+    public(script) fun mock_sequence_numbers()
+    acquires Account {
+        let addr: address = @0x1234; // Define test address
+        create_account(addr); // Initialize account resource
+        // Assert sequence number intializes to 0
+        assert!(borrow_global<Account>(addr).sequence_number == 0, 0);
+        increment_sequence_number(addr); // Increment sequence number
+        // Assert correct mock value post-increment
+        assert!(borrow_global<Account>(addr).sequence_number == 1, 1);
+        set_sequence_number(addr, 10); // Set mock sequence number
+        // Assert correct mock value post-modification
+        assert!(borrow_global<Account>(addr).sequence_number == 10, 2);
+    }
+
 }

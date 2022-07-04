@@ -28,15 +28,18 @@ use aptos_types::{
     },
     write_set::WriteSet,
 };
-use scratchpad::ProofRead;
+use scratchpad::{ProofRead, SparseMerkleTree};
 use serde::{Deserialize, Serialize};
 use std::{cmp::max, collections::HashMap, sync::Arc};
 use storage_interface::DbReader;
 
 pub use executed_chunk::ExecutedChunk;
-use storage_interface::{in_memory_state::InMemoryState, verified_state_view::VerifiedStateView};
+use storage_interface::{
+    cached_state_view::CachedStateView, in_memory_state::InMemoryState,
+    no_proof_fetcher::NoProofFetcher, sync_proof_fetcher::SyncProofFetcher,
+};
 
-type SparseMerkleProof = aptos_types::proof::SparseMerkleProof<StateValue>;
+type SparseMerkleProof = aptos_types::proof::SparseMerkleProof;
 
 pub trait ChunkExecutorTrait: Send + Sync {
     /// Verifies the transactions based on the provided proofs and ledger info. If the transactions
@@ -59,26 +62,31 @@ pub trait ChunkExecutorTrait: Send + Sync {
         epoch_change_li: Option<&LedgerInfoWithSignatures>,
     ) -> anyhow::Result<()>;
 
-    /// Commit a previously executed chunk. Returns a vector of reconfiguration
-    /// events in the chunk and the transactions that were committed.
-    fn commit_chunk(&self) -> Result<(Vec<ContractEvent>, Vec<Transaction>)>;
+    /// Commit a previously executed chunk. Returns a chunk commit notification.
+    fn commit_chunk(&self) -> Result<ChunkCommitNotification>;
 
     fn execute_and_commit_chunk(
         &self,
         txn_list_with_proof: TransactionListWithProof,
         verified_target_li: &LedgerInfoWithSignatures,
         epoch_change_li: Option<&LedgerInfoWithSignatures>,
-    ) -> Result<(Vec<ContractEvent>, Vec<Transaction>)>;
+    ) -> Result<ChunkCommitNotification>;
 
     fn apply_and_commit_chunk(
         &self,
         txn_output_list_with_proof: TransactionOutputListWithProof,
         verified_target_li: &LedgerInfoWithSignatures,
         epoch_change_li: Option<&LedgerInfoWithSignatures>,
-    ) -> Result<(Vec<ContractEvent>, Vec<Transaction>)>;
+    ) -> Result<ChunkCommitNotification>;
 
     /// Resets the chunk executor by synchronizing state with storage.
     fn reset(&self) -> Result<()>;
+}
+
+pub struct StateSnapshotDelta {
+    pub version: Version,
+    pub smt: SparseMerkleTree<StateValue>,
+    pub jmt_updates: Vec<(HashValue, (HashValue, StateKey))>,
 }
 
 pub trait BlockExecutorTrait: Send + Sync {
@@ -104,11 +112,24 @@ pub trait BlockExecutorTrait: Send + Sync {
     /// and only `C` and `E` have signatures, we will send `A`, `B` and `C` in the first batch,
     /// then `D` and `E` later in the another batch.
     /// Commits a block and all its ancestors in a batch manner.
+    fn commit_blocks_ext(
+        &self,
+        block_ids: Vec<HashValue>,
+        ledger_info_with_sigs: LedgerInfoWithSignatures,
+        save_state_snapshots: bool,
+    ) -> Result<Option<StateSnapshotDelta>, Error>;
+
     fn commit_blocks(
         &self,
         block_ids: Vec<HashValue>,
         ledger_info_with_sigs: LedgerInfoWithSignatures,
-    ) -> Result<(), Error>;
+    ) -> Result<Option<StateSnapshotDelta>, Error> {
+        self.commit_blocks_ext(
+            block_ids,
+            ledger_info_with_sigs,
+            true, /* save_state_snapshots */
+        )
+    }
 }
 
 pub trait TransactionReplayer: Send {
@@ -119,6 +140,13 @@ pub trait TransactionReplayer: Send {
     ) -> Result<()>;
 
     fn commit(&self) -> Result<Arc<ExecutedChunk>>;
+}
+
+/// A structure that holds relevant information about a chunk that was committed.
+pub struct ChunkCommitNotification {
+    pub committed_events: Vec<ContractEvent>,
+    pub committed_transactions: Vec<Transaction>,
+    pub reconfiguration_occurred: bool,
 }
 
 /// A structure that summarizes the result of the execution needed for consensus to agree on.
@@ -134,7 +162,7 @@ pub struct StateComputeResult {
     /// transaction accumulator root hash is identified as `state_id` in Consensus.
     root_hash: HashValue,
     /// Represents the roots of all the full subtrees from left to right in this accumulator
-    /// after the execution. For details, please see [`InMemoryAccumulator`](accumulator::InMemoryAccumulator).
+    /// after the execution. For details, please see [`InMemoryAccumulator`](aptos_types::proof::accumulator::InMemoryAccumulator).
     frozen_subtree_roots: Vec<HashValue>,
 
     /// The frozen subtrees roots of the parent block,
@@ -325,7 +353,10 @@ impl ExecutedTrees {
         frozen_subtrees_in_accumulator: Vec<HashValue>,
         num_leaves_in_accumulator: u64,
     ) -> Self {
-        let state = InMemoryState::new_at_checkpoint(state_root_hash, num_leaves_in_accumulator);
+        let state = InMemoryState::new_at_checkpoint(
+            state_root_hash,
+            num_leaves_in_accumulator.checked_sub(1),
+        );
         let transaction_accumulator = Arc::new(
             InMemoryAccumulator::new(frozen_subtrees_in_accumulator, num_leaves_in_accumulator)
                 .expect("The startup info read from storage should be valid."),
@@ -345,18 +376,31 @@ impl ExecutedTrees {
         self.transaction_accumulator.root_hash() == rhs.transaction_accumulator.root_hash()
     }
 
-    pub fn state_view(
+    pub fn verified_state_view(
         &self,
-        persisted_view: &Self,
         id: StateViewId,
         reader: Arc<dyn DbReader>,
-    ) -> VerifiedStateView {
-        VerifiedStateView::new(
+    ) -> Result<CachedStateView> {
+        CachedStateView::new(
             id,
             reader.clone(),
-            persisted_view.state.checkpoint_version(),
-            persisted_view.state.checkpoint_root_hash(),
+            self.transaction_accumulator.num_leaves(),
             self.state.current.clone(),
+            Arc::new(SyncProofFetcher::new(reader)),
+        )
+    }
+
+    pub fn state_view(
+        &self,
+        id: StateViewId,
+        reader: Arc<dyn DbReader>,
+    ) -> Result<CachedStateView> {
+        CachedStateView::new(
+            id,
+            reader.clone(),
+            self.transaction_accumulator.num_leaves(),
+            self.state.current.clone(),
+            Arc::new(NoProofFetcher::new(reader)),
         )
     }
 }
@@ -381,7 +425,7 @@ impl ProofReader {
     }
 }
 
-impl ProofRead<StateValue> for ProofReader {
+impl ProofRead for ProofReader {
     fn get_proof(&self, key: HashValue) -> Option<&SparseMerkleProof> {
         self.proofs.get(&key)
     }

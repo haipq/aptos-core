@@ -10,8 +10,8 @@ publish = false
 edition = "2018"
 
 [dependencies]
-futures = "0.3.12"
-tokio = { version = "1.8.1", features = ["full"] }
+futures = "0.3.21"
+tokio = { version = "1.18.2", features = ["full"] }
 
 aptos-config = { path = "../../../config" }
 aptos-data-client = { path = "../../aptos-data-client" }
@@ -29,7 +29,7 @@ storage-interface = { path = "../../../storage/storage-interface" }
 
 [dev-dependencies]
 aptos-crypto = { path = "../../../crates/aptos-crypto" }
-aptos-genesis-tool = { path = "../../../config/management/genesis", features = ["testing"] }
+aptos-genesis = { path = "../../../crates/aptos-genesis", features = ["testing"] }
 aptos-infallible = { path = "../../../crates/aptos-infallible" }
 aptos-temppath = { path = "../../../crates/aptos-temppath" }
 aptos-time-service = { path = "../../../crates/aptos-time-service", features = ["async", "testing"] }

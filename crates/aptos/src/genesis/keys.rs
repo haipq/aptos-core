@@ -3,23 +3,19 @@
 
 use crate::{
     common::{
-        types::{CliError, CliTypedResult, PromptOptions},
-        utils::{check_if_file_exists, read_from_file, write_to_file},
+        types::{CliError, CliTypedResult, PromptOptions, RngArgs},
+        utils::{check_if_file_exists, read_from_file, write_to_user_only_file},
     },
-    genesis::{
-        config::{HostAndPort, ValidatorConfiguration},
-        git::{from_yaml, to_yaml, GitOptions},
-    },
-    op::key,
+    genesis::git::{from_yaml, to_yaml, GitOptions},
     CliCommand,
 };
-use aptos_config::{config::IdentityBlob, keys::ConfigKey};
-use aptos_crypto::{ed25519::Ed25519PrivateKey, x25519, PrivateKey};
-use aptos_types::transaction::authenticator::AuthenticationKey;
+use aptos_crypto::PrivateKey;
+use aptos_genesis::{
+    config::{HostAndPort, ValidatorConfiguration},
+    keys::{generate_key_objects, PrivateIdentity},
+};
 use async_trait::async_trait;
 use clap::Parser;
-use move_deps::move_core_types::account_address::AccountAddress;
-use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 const PRIVATE_KEYS_FILE: &str = "private-keys.yaml";
@@ -30,10 +26,12 @@ const VFN_FILE: &str = "validator-full-node-identity.yaml";
 #[derive(Parser)]
 pub struct GenerateKeys {
     #[clap(flatten)]
-    prompt_options: PromptOptions,
+    pub(crate) prompt_options: PromptOptions,
+    #[clap(flatten)]
+    pub rng_args: RngArgs,
     /// Output path for the three keys
     #[clap(long, parse(from_os_str), default_value = ".")]
-    output_dir: PathBuf,
+    pub(crate) output_dir: PathBuf,
 }
 
 #[async_trait]
@@ -50,35 +48,9 @@ impl CliCommand<Vec<PathBuf>> for GenerateKeys {
         check_if_file_exists(validator_file.as_path(), self.prompt_options)?;
         check_if_file_exists(vfn_file.as_path(), self.prompt_options)?;
 
-        let account_key = ConfigKey::new(key::GenerateKey::generate_ed25519_in_memory());
-        let consensus_key = ConfigKey::new(key::GenerateKey::generate_ed25519_in_memory());
-        let validator_network_key = ConfigKey::new(key::GenerateKey::generate_x25519_in_memory()?);
-        let full_node_network_key = ConfigKey::new(key::GenerateKey::generate_x25519_in_memory()?);
-
-        let account_address =
-            AuthenticationKey::ed25519(&account_key.public_key()).derived_address();
-
-        // Build these for use later as node identity
-        let validator_blob = IdentityBlob {
-            account_address: Some(account_address),
-            account_key: Some(account_key.private_key()),
-            consensus_key: Some(consensus_key.private_key()),
-            network_key: validator_network_key.private_key(),
-        };
-        let vfn_blob = IdentityBlob {
-            account_address: Some(account_address),
-            account_key: None,
-            consensus_key: None,
-            network_key: full_node_network_key.private_key(),
-        };
-
-        let config = PrivateIdentity {
-            account_address,
-            account_key: account_key.private_key(),
-            consensus_key: consensus_key.private_key(),
-            full_node_network_key: full_node_network_key.private_key(),
-            validator_network_key: validator_network_key.private_key(),
-        };
+        let mut key_generator = self.rng_args.key_generator()?;
+        let (validator_blob, vfn_blob, private_identity) =
+            generate_key_objects(&mut key_generator)?;
 
         // Create the directory if it doesn't exist
         if !self.output_dir.exists() || !self.output_dir.is_dir() {
@@ -86,29 +58,19 @@ impl CliCommand<Vec<PathBuf>> for GenerateKeys {
                 .map_err(|e| CliError::IO(self.output_dir.to_str().unwrap().to_string(), e))?
         };
 
-        write_to_file(
+        write_to_user_only_file(
             keys_file.as_path(),
             PRIVATE_KEYS_FILE,
-            to_yaml(&config)?.as_bytes(),
+            to_yaml(&private_identity)?.as_bytes(),
         )?;
-        write_to_file(
+        write_to_user_only_file(
             validator_file.as_path(),
             VALIDATOR_FILE,
             to_yaml(&validator_blob)?.as_bytes(),
         )?;
-        write_to_file(vfn_file.as_path(), VFN_FILE, to_yaml(&vfn_blob)?.as_bytes())?;
+        write_to_user_only_file(vfn_file.as_path(), VFN_FILE, to_yaml(&vfn_blob)?.as_bytes())?;
         Ok(vec![keys_file, validator_file, vfn_file])
     }
-}
-
-/// Type for serializing private keys file
-#[derive(Deserialize, Serialize)]
-pub struct PrivateIdentity {
-    account_address: AccountAddress,
-    account_key: Ed25519PrivateKey,
-    consensus_key: Ed25519PrivateKey,
-    full_node_network_key: x25519::PrivateKey,
-    validator_network_key: x25519::PrivateKey,
 }
 
 /// Set ValidatorConfiguration for a single validator in the git repository
@@ -116,21 +78,21 @@ pub struct PrivateIdentity {
 pub struct SetValidatorConfiguration {
     /// Username
     #[clap(long)]
-    username: String,
+    pub(crate) username: String,
     #[clap(flatten)]
-    git_options: GitOptions,
+    pub(crate) git_options: GitOptions,
     /// Path to folder with account.key, consensus.key, and network.key
     #[clap(long, parse(from_os_str), default_value = ".")]
-    keys_dir: PathBuf,
+    pub(crate) keys_dir: PathBuf,
     /// Host and port pair for the validator e.g. 127.0.0.1:6180
     #[clap(long)]
-    validator_host: HostAndPort,
+    pub(crate) validator_host: HostAndPort,
     /// Host and port pair for the fullnode e.g. 127.0.0.1:6180
     #[clap(long)]
-    full_node_host: Option<HostAndPort>,
+    pub(crate) full_node_host: Option<HostAndPort>,
     /// Stake amount for stake distribution
-    #[clap(long, default_value = "1")]
-    stake_amount: u64,
+    #[clap(long, default_value_t = 1)]
+    pub(crate) stake_amount: u64,
 }
 
 #[async_trait]
@@ -145,18 +107,23 @@ impl CliCommand<()> for SetValidatorConfiguration {
         let key_files: PrivateIdentity =
             from_yaml(&String::from_utf8(bytes).map_err(CliError::from)?)?;
         let account_address = key_files.account_address;
-        let account_key = key_files.account_key.public_key();
-        let consensus_key = key_files.consensus_key.public_key();
-        let validator_network_key = key_files.validator_network_key.public_key();
-        let full_node_network_key = key_files.full_node_network_key.public_key();
+        let account_key = key_files.account_private_key.public_key();
+        let consensus_key = key_files.consensus_private_key.public_key();
+        let validator_network_key = key_files.validator_network_private_key.public_key();
+
+        let full_node_network_key = if self.full_node_host.is_some() {
+            Some(key_files.full_node_network_private_key.public_key())
+        } else {
+            None
+        };
 
         let credentials = ValidatorConfiguration {
             account_address,
-            consensus_key,
-            account_key,
-            validator_network_key,
+            consensus_public_key: consensus_key,
+            account_public_key: account_key,
+            validator_network_public_key: validator_network_key,
             validator_host: self.validator_host,
-            full_node_network_key,
+            full_node_network_public_key: full_node_network_key,
             full_node_host: self.full_node_host,
             stake_amount: self.stake_amount,
         };
