@@ -4,14 +4,13 @@
 use crate::persistent_liveness_storage::PersistentLivenessStorage;
 use aptos_crypto::ed25519::Ed25519Signature;
 use aptos_logger::prelude::info;
-use aptos_metrics::monitor;
+use aptos_metrics_core::monitor;
 use aptos_types::{
     epoch_change::EpochChangeProof,
     ledger_info::{LedgerInfo, LedgerInfoWithSignatures},
 };
 use consensus_types::{
     block_data::BlockData,
-    timeout::Timeout,
     timeout_2chain::{TwoChainTimeout, TwoChainTimeoutCertificate},
     vote::Vote,
     vote_proposal::MaybeSignedVoteProposal,
@@ -90,19 +89,8 @@ impl TSafetyRules for MetricsSafetyRules {
         monitor!("safety_rules", self.inner.initialize(proof))
     }
 
-    fn construct_and_sign_vote(
-        &mut self,
-        vote_proposal: &MaybeSignedVoteProposal,
-    ) -> Result<Vote, Error> {
-        self.retry(|inner| monitor!("safety_rules", inner.construct_and_sign_vote(vote_proposal)))
-    }
-
     fn sign_proposal(&mut self, block_data: &BlockData) -> Result<Ed25519Signature, Error> {
         self.retry(|inner| monitor!("safety_rules", inner.sign_proposal(block_data)))
-    }
-
-    fn sign_timeout(&mut self, timeout: &Timeout) -> Result<Ed25519Signature, Error> {
-        self.retry(|inner| monitor!("safety_rules", inner.sign_timeout(timeout)))
     }
 
     fn sign_timeout_with_qc(
@@ -156,7 +144,6 @@ mod tests {
     use claim::{assert_matches, assert_ok};
     use consensus_types::{
         block_data::BlockData,
-        timeout::Timeout,
         timeout_2chain::{TwoChainTimeout, TwoChainTimeoutCertificate},
         vote::Vote,
         vote_proposal::MaybeSignedVoteProposal,
@@ -206,15 +193,7 @@ mod tests {
             self.last_init_result.clone()
         }
 
-        fn construct_and_sign_vote(&mut self, _: &MaybeSignedVoteProposal) -> Result<Vote, Error> {
-            unimplemented!()
-        }
-
         fn sign_proposal(&mut self, _: &BlockData) -> Result<Ed25519Signature, Error> {
-            unimplemented!()
-        }
-
-        fn sign_timeout(&mut self, _: &Timeout) -> Result<Ed25519Signature, Error> {
             unimplemented!()
         }
 

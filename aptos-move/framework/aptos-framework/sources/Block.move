@@ -21,6 +21,7 @@ module AptosFramework::Block {
         round: u64,
         previous_block_votes: vector<bool>,
         proposer: address,
+        failed_proposer_indices: vector<u64>,
         /// On-chain time during  he block at the given height
         time_microseconds: u64,
     }
@@ -60,7 +61,9 @@ module AptosFramework::Block {
         epoch: u64,
         round: u64,
         previous_block_votes: vector<bool>,
+        missed_votes: vector<u64>,
         proposer: address,
+        failed_proposer_indices: vector<u64>,
         timestamp: u64
     ) acquires BlockMetadata {
         Timestamp::assert_operating();
@@ -83,13 +86,17 @@ module AptosFramework::Block {
                 round,
                 previous_block_votes,
                 proposer,
+                failed_proposer_indices,
                 time_microseconds: timestamp,
             }
         );
 
         if (timestamp - Reconfiguration::last_reconfiguration_time() > block_metadata_ref.epoch_internal) {
             Reconfiguration::reconfigure();
-        }
+        };
+
+        // Update performance score after potential reconfigure, which resets all performance scores.
+        Stake::update_performance_statistics(missed_votes);
     }
 
     /// Get the current block height

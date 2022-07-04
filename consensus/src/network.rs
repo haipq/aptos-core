@@ -8,7 +8,7 @@ use crate::{
 };
 use anyhow::{anyhow, ensure};
 use aptos_logger::prelude::*;
-use aptos_metrics::monitor;
+use aptos_metrics_core::monitor;
 use aptos_types::{
     account_address::AccountAddress, epoch_change::EpochChangeProof,
     ledger_info::LedgerInfoWithSignatures, validator_verifier::ValidatorVerifier,
@@ -94,8 +94,8 @@ impl NetworkSender {
         let msg = ConsensusMsg::BlockRetrievalRequest(Box::new(retrieval_request.clone()));
         let response_msg = monitor!(
             "block_retrieval",
-            self.network_sender.send_rpc(from, msg, timeout).await?
-        );
+            self.network_sender.send_rpc(from, msg, timeout).await
+        )?;
         let response = match response_msg {
             ConsensusMsg::BlockRetrievalResponse(resp) => *resp,
             _ => return Err(anyhow!("Invalid response to request")),

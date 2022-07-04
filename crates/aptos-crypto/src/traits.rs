@@ -3,8 +3,7 @@
 
 //! This module provides a generic set of traits for dealing with cryptographic primitives.
 //!
-//! For examples on how to use these traits, see the implementations of the [`ed25519`] or
-//! [`bls12381`] modules.
+//! For examples on how to use these traits, see the implementations of the [`crate::ed25519`]
 
 use crate::hash::{CryptoHash, CryptoHasher};
 use anyhow::Result;
@@ -311,4 +310,9 @@ pub(crate) mod private {
     impl Sealed for crate::multi_ed25519::MultiEd25519PrivateKey {}
     impl Sealed for crate::multi_ed25519::MultiEd25519PublicKey {}
     impl Sealed for crate::multi_ed25519::MultiEd25519Signature {}
+
+    impl Sealed for crate::bls12381::PrivateKey {}
+    impl Sealed for crate::bls12381::PublicKey {}
+    impl Sealed for crate::bls12381::Signature {}
+    impl Sealed for crate::bls12381::ProofOfPossession {}
 }

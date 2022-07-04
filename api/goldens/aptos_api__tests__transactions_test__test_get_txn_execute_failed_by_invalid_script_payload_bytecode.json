@@ -16,7 +16,7 @@
       "data": {
         "type": "0x1::Account::Account",
         "data": {
-          "authentication_key": "0x7deeccb1080854f499ec8b4c1b213b82c5e34b925cf6875fec02d4b77adbd2d6",
+          "authentication_key": "0xcef8ffd1ab9017e96132df8a56b22de39a8155e1c3fc32affbbf93eb624b532a",
           "self_address": "0xa550c18",
           "sequence_number": "1"
         }
@@ -27,10 +27,34 @@
       "address": "0xa550c18",
       "state_key_hash": "",
       "data": {
-        "type": "0x1::TestCoin::Balance",
+        "type": "0x1::Coin::CoinStore<0x1::TestCoin::TestCoin>",
         "data": {
           "coin": {
             "value": "18446744073709551614"
+          },
+          "deposit_events": {
+            "counter": "1",
+            "guid": {
+              "guid": {
+                "id": {
+                  "addr": "0xa550c18",
+                  "creation_num": "1"
+                }
+              },
+              "len_bytes": 40
+            }
+          },
+          "withdraw_events": {
+            "counter": "1",
+            "guid": {
+              "guid": {
+                "id": {
+                  "addr": "0xa550c18",
+                  "creation_num": "2"
+                }
+              },
+              "len_bytes": 40
+            }
           }
         }
       }
@@ -52,8 +76,8 @@
   },
   "signature": {
     "type": "ed25519_signature",
-    "public_key": "0xb9c6ee1630ef3e711144a648db06bbb2284f7274cfbee53ffcee503cc1a49200",
-    "signature": "0x5016020ee5f52af06f70ccc11a2691e2e32326fa543f51f01aae498090b70eedc042e14f97211390185b1f7f90896cabf80eef9f46994b75f94030adb3faae09"
+    "public_key": "0x14418f867a0bd6d42abb2daa50cd68a5a869ce208282481f57504f630510d0d3",
+    "signature": "0x03b95571547a2042f4685974a4f4a6e7188aef8149be2cfb46b0b2f6f41f392cf6b9be21b23c25df6241d0247e1b921efdd7c9d392ecf27e51723a960bfff404"
   },
   "events": [],
   "timestamp": "1"

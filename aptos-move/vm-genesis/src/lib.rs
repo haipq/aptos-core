@@ -15,8 +15,7 @@ use aptos_types::{
     chain_id::ChainId,
     contract_event::ContractEvent,
     on_chain_config::{
-        ConsensusConfigV1, ConsensusConfigV2, OnChainConsensusConfig, VMPublishingOption,
-        APTOS_MAX_KNOWN_VERSION,
+        ConsensusConfigV1, OnChainConsensusConfig, VMPublishingOption, APTOS_MAX_KNOWN_VERSION,
     },
     transaction::{authenticator::AuthenticationKey, ChangeSet, Transaction, WriteSetPayload},
 };
@@ -44,6 +43,10 @@ const GENESIS_SEED: [u8; 32] = [42; 32];
 
 const GENESIS_MODULE_NAME: &str = "Genesis";
 
+const NUM_SECONDS_PER_YEAR: u64 = 365 * 24 * 60 * 60;
+const MICRO_SECONDS_PER_SECOND: u64 = 1_000_000;
+const FIXED_REWARDS_APY: u64 = 10;
+
 pub static GENESIS_KEYPAIR: Lazy<(Ed25519PrivateKey, Ed25519PublicKey)> = Lazy::new(|| {
     let mut rng = StdRng::from_seed(GENESIS_SEED);
     let private_key = Ed25519PrivateKey::generate(&mut rng);
@@ -57,13 +60,14 @@ pub fn encode_genesis_transaction(
     stdlib_module_bytes: &[Vec<u8>],
     chain_id: ChainId,
     min_price_per_gas_unit: u64,
+    epoch_duration_secs: u64,
+    min_stake: u64,
+    max_stake: u64,
+    min_lockup_duration_secs: u64,
+    max_lockup_duration_secs: u64,
+    allow_new_validators: bool,
 ) -> Transaction {
-    let consensus_config = OnChainConsensusConfig::V2(ConsensusConfigV2 {
-        two_chain: true,
-        decoupled_execution: true,
-        back_pressure_limit: 10,
-        exclude_round: 20,
-    });
+    let consensus_config = OnChainConsensusConfig::V1(ConsensusConfigV1::default());
 
     Transaction::GenesisTransaction(WriteSetPayload::Direct(encode_genesis_change_set(
         &aptos_root_key,
@@ -73,6 +77,12 @@ pub fn encode_genesis_transaction(
         consensus_config,
         chain_id,
         min_price_per_gas_unit,
+        epoch_duration_secs,
+        min_stake,
+        max_stake,
+        min_lockup_duration_secs,
+        max_lockup_duration_secs,
+        allow_new_validators,
     )))
 }
 
@@ -84,6 +94,12 @@ pub fn encode_genesis_change_set(
     consensus_config: OnChainConsensusConfig,
     chain_id: ChainId,
     min_price_per_gas_unit: u64,
+    epoch_duration_secs: u64,
+    min_stake: u64,
+    max_stake: u64,
+    min_lockup_duration_secs: u64,
+    max_lockup_duration_secs: u64,
+    allow_new_validators: bool,
 ) -> ChangeSet {
     let mut stdlib_modules = Vec::new();
     // create a data view for move_vm
@@ -106,6 +122,12 @@ pub fn encode_genesis_change_set(
         consensus_config,
         chain_id,
         min_price_per_gas_unit,
+        epoch_duration_secs,
+        min_stake,
+        max_stake,
+        min_lockup_duration_secs,
+        max_lockup_duration_secs,
+        allow_new_validators,
     );
     // generate the genesis WriteSet
     create_and_initialize_validators(&mut session, validators);
@@ -172,6 +194,12 @@ fn create_and_initialize_main_accounts(
     consensus_config: OnChainConsensusConfig,
     chain_id: ChainId,
     min_price_per_gas_unit: u64,
+    epoch_duration_secs: u64,
+    min_stake: u64,
+    max_stake: u64,
+    min_lockup_duration_secs: u64,
+    max_lockup_duration_secs: u64,
+    allow_new_validators: bool,
 ) {
     let aptos_root_auth_key = AuthenticationKey::ed25519(aptos_root_key);
 
@@ -194,11 +222,19 @@ fn create_and_initialize_main_accounts(
     let consensus_config_bytes =
         bcs::to_bytes(&consensus_config).expect("Failure serializing genesis consensus config");
 
-    // TODO: make these configurable
-    let epoch_interval = 86400 * 1000000;
-    let minimum_stake = 0;
-    let maximum_stake = 1000000;
+    // TODO: Make reward rate numerator/denominator configurable in the genesis blob.
+    // We're aiming for roughly 10% APY.
+    let num_epochs_in_a_year = NUM_SECONDS_PER_YEAR / epoch_duration_secs;
+    let rewards_rate_per_epoch = (FIXED_REWARDS_APY / 100) / num_epochs_in_a_year;
+    // This represents the rewards rate fraction (numerator / denominator).
+    // For an APY=0.1 (10%) and epoch interval = 1 hour, the numerator = 1M * 0.1 / (365 * 24) ~ 11.
+    // Rewards rate = 11 / 1M ~ 0.0011% per 1 hour. This compounds to ~10.12% per year.
+    let rewards_rate_denominator = 1_000_000;
+    let rewards_rate_numerator = rewards_rate_per_epoch * rewards_rate_denominator;
 
+    // Block timestamps are in microseconds and epoch_interval is used to check if a block timestamp
+    // has crossed into a new epoch. So epoch_interval also needs to be in micro seconds.
+    let epoch_interval_usecs = epoch_duration_secs * MICRO_SECONDS_PER_SECOND;
     exec_function(
         session,
         GENESIS_MODULE_NAME,
@@ -215,9 +251,14 @@ fn create_and_initialize_main_accounts(
             MoveValue::U64(APTOS_MAX_KNOWN_VERSION.major),
             MoveValue::vector_u8(consensus_config_bytes),
             MoveValue::U64(min_price_per_gas_unit),
-            MoveValue::U64(epoch_interval),
-            MoveValue::U64(minimum_stake),
-            MoveValue::U64(maximum_stake),
+            MoveValue::U64(epoch_interval_usecs),
+            MoveValue::U64(min_stake),
+            MoveValue::U64(max_stake),
+            MoveValue::U64(min_lockup_duration_secs),
+            MoveValue::U64(max_lockup_duration_secs),
+            MoveValue::Bool(allow_new_validators),
+            MoveValue::U64(rewards_rate_numerator),
+            MoveValue::U64(rewards_rate_denominator),
         ]),
     );
 }
@@ -231,7 +272,6 @@ fn create_and_initialize_validators(
 ) {
     let aptos_root_address = account_config::aptos_root_address();
     let mut owners = vec![];
-    let mut owner_auth_keys = vec![];
     let mut consensus_pubkeys = vec![];
     let mut validator_network_addresses = vec![];
     let mut full_node_network_addresses = vec![];
@@ -239,10 +279,10 @@ fn create_and_initialize_validators(
 
     for v in validators {
         owners.push(MoveValue::Address(v.address));
-        owner_auth_keys.push(MoveValue::vector_u8(v.auth_key.to_vec()));
         consensus_pubkeys.push(MoveValue::vector_u8(v.consensus_pubkey.clone()));
-        validator_network_addresses.push(MoveValue::vector_u8(v.network_address.clone()));
-        full_node_network_addresses.push(MoveValue::vector_u8(v.full_node_network_address.clone()));
+        validator_network_addresses.push(MoveValue::vector_u8(v.network_addresses.clone()));
+        full_node_network_addresses
+            .push(MoveValue::vector_u8(v.full_node_network_addresses.clone()));
         staking_distribution.push(MoveValue::U64(v.stake_amount));
     }
     exec_function(
@@ -253,7 +293,6 @@ fn create_and_initialize_validators(
         serialize_values(&vec![
             MoveValue::Signer(aptos_root_address),
             MoveValue::Vector(owners),
-            MoveValue::Vector(owner_auth_keys),
             MoveValue::Vector(consensus_pubkeys),
             MoveValue::Vector(validator_network_addresses),
             MoveValue::Vector(full_node_network_addresses),
@@ -354,19 +393,15 @@ pub fn test_genesis_change_set_and_validators(
 pub struct Validator {
     /// The Aptos account address of the validator
     pub address: AccountAddress,
-    /// Authentication key for the validator
-    pub auth_key: AuthenticationKey,
     /// Ed25519 public key used to sign consensus messages
     pub consensus_pubkey: Vec<u8>,
     /// The Aptos account address of the validator's operator (same as `address` if the validator is
     /// its own operator)
     pub operator_address: AccountAddress,
-    /// Authentication key for the operator
-    pub operator_auth_key: AuthenticationKey,
     /// `NetworkAddress` for the validator
-    pub network_address: Vec<u8>,
+    pub network_addresses: Vec<u8>,
     /// `NetworkAddress` for the validator's full node
-    pub full_node_network_address: Vec<u8>,
+    pub full_node_network_addresses: Vec<u8>,
     /// Amount to stake for consensus
     pub stake_amount: u64,
 }
@@ -380,29 +415,24 @@ impl TestValidator {
     pub fn new_test_set(count: Option<usize>) -> Vec<TestValidator> {
         let mut rng: rand::rngs::StdRng = rand::SeedableRng::from_seed([1u8; 32]);
         (0..count.unwrap_or(10))
-            .map(|idx| TestValidator::gen(idx, &mut rng))
+            .map(|_| TestValidator::gen(&mut rng))
             .collect()
     }
 
-    fn gen(index: usize, rng: &mut rand::rngs::StdRng) -> TestValidator {
-        let name = index.to_string().as_bytes().to_vec();
-        let address = aptos_config::utils::validator_owner_account_from_name(&name);
+    fn gen(rng: &mut rand::rngs::StdRng) -> TestValidator {
         let key = Ed25519PrivateKey::generate(rng);
         let auth_key = AuthenticationKey::ed25519(&key.public_key());
+        let address = auth_key.derived_address();
         let consensus_pubkey = key.public_key().to_bytes().to_vec();
-        let operator_auth_key = auth_key;
-        let operator_address = operator_auth_key.derived_address();
         let network_address = [0u8; 0].to_vec();
         let full_node_network_address = [0u8; 0].to_vec();
 
         let data = Validator {
             address,
-            auth_key,
             consensus_pubkey,
-            operator_address,
-            operator_auth_key,
-            network_address,
-            full_node_network_address,
+            operator_address: address,
+            network_addresses: network_address,
+            full_node_network_addresses: full_node_network_address,
             stake_amount: 1,
         };
         Self { key, data }
@@ -423,9 +453,15 @@ pub fn generate_test_genesis(
         validators,
         stdlib_modules,
         vm_publishing_option,
-        OnChainConsensusConfig::V1(ConsensusConfigV1 { two_chain: true }),
+        OnChainConsensusConfig::default(),
         ChainId::test(),
         0,
+        86400,
+        0,
+        1000000,
+        0,
+        86400 * 365,
+        false,
     );
     (genesis, test_validators)
 }

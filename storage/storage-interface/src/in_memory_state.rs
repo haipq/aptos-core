@@ -3,7 +3,6 @@
 
 use aptos_crypto::HashValue;
 use aptos_types::{
-    proof::definition::LeafCount,
     state_store::{state_key::StateKey, state_value::StateValue},
     transaction::Version,
 };
@@ -20,43 +19,43 @@ use std::collections::HashSet;
 #[derive(Clone, Debug)]
 pub struct InMemoryState {
     pub checkpoint: SparseMerkleTree<StateValue>,
-    pub checkpoint_num_transactions: LeafCount,
+    pub checkpoint_version: Option<Version>,
     pub current: SparseMerkleTree<StateValue>,
+    pub current_version: Option<Version>,
     pub updated_since_checkpoint: HashSet<StateKey>,
 }
 
 impl InMemoryState {
     pub fn new(
         checkpoint: SparseMerkleTree<StateValue>,
-        checkpoint_num_transactions: LeafCount,
+        checkpoint_version: Option<Version>,
         current: SparseMerkleTree<StateValue>,
+        current_version: Option<Version>,
         updated_since_checkpoint: HashSet<StateKey>,
     ) -> Self {
         Self {
             checkpoint,
-            checkpoint_num_transactions,
+            checkpoint_version,
             current,
+            current_version,
             updated_since_checkpoint,
         }
     }
 
     pub fn new_empty() -> Self {
         let smt = SparseMerkleTree::new_empty();
-        Self::new(smt.clone(), 0, smt, HashSet::new())
+        Self::new(smt.clone(), None, smt, None, HashSet::new())
     }
 
-    pub fn new_at_checkpoint(root_hash: HashValue, checkpoint_num_transactions: LeafCount) -> Self {
+    pub fn new_at_checkpoint(root_hash: HashValue, checkpoint_version: Option<Version>) -> Self {
         let smt = SparseMerkleTree::new(root_hash);
         Self::new(
             smt.clone(),
-            checkpoint_num_transactions,
+            checkpoint_version,
             smt,
+            checkpoint_version,
             HashSet::new(),
         )
-    }
-
-    pub fn checkpoint_version(&self) -> Option<Version> {
-        self.checkpoint_num_transactions.checked_sub(1)
     }
 
     pub fn checkpoint_root_hash(&self) -> HashValue {

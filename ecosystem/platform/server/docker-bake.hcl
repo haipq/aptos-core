@@ -3,11 +3,16 @@
 # Check https://crazymax.dev/docker-allhands2-buildx-bake and https://docs.docker.com/engine/reference/commandline/buildx_bake/#file-definition for an intro.
 
 
-variable "GIT_SHA1" {}
-variable "AWS_ECR_ACCOUNT_URL" {}
+variable "TARGET_CACHE_ID" {}
+variable "GIT_SHA" {}
+variable "AWS_ECR_ACCOUNT_NUM" {}
+variable "GCP_DOCKER_ARTIFACT_REPO" {}
+variable "ecr_base" {
+  default = "${AWS_ECR_ACCOUNT_NUM}.dkr.ecr.us-west-2.amazonaws.com/aptos"
+}
 
-variable "gh_image_cache" {
-  default = "ghcr.io/aptos-labs/aptos-core/community-platform"
+variable "normalized_target_cache_id" {
+  default = regex_replace("${TARGET_CACHE_ID}", "[^a-zA-Z0-9]", "-")
 }
 
 group "default" {
@@ -19,7 +24,14 @@ group "default" {
 target "community-platform" {
   dockerfile = "Dockerfile"
   context    = "."
-  cache-from = ["type=registry,ref=${gh_image_cache}"]
-  cache-to   = ["type=registry,ref=${gh_image_cache},mode=max"]
-  tags       = ["${AWS_ECR_ACCOUNT_URL}/aptos/community-platform:${GIT_SHA1}"]
+  cache-from = [
+    "type=registry,ref=${GCP_DOCKER_ARTIFACT_REPO}/community-platform:cache-main",
+    "type=registry,ref=${GCP_DOCKER_ARTIFACT_REPO}/community-platform:cache-auto",
+    "type=registry,ref=${GCP_DOCKER_ARTIFACT_REPO}/community-platform:cache-${normalized_target_cache_id}",
+  ]
+  cache-to = ["type=registry,ref=${GCP_DOCKER_ARTIFACT_REPO}/community-platform:cache-${normalized_target_cache_id},mode=max"]
+  tags = [
+    "${ecr_base}/community-platform:${GIT_SHA}",
+    "${GCP_DOCKER_ARTIFACT_REPO}/community-platform:${GIT_SHA}",
+  ]
 }

@@ -5,10 +5,13 @@ chain:
 
 imageTag: testnet
 
+# Number of validators to deploy
+numValidators: 1
+
 validator:
   name:
   image:
-    repo: aptoslab/validator
+    repo: aptoslabs/validator
     tag:
     pullPolicy: IfNotPresent
   resources:
@@ -23,6 +26,7 @@ validator:
     size: 350Gi
   rust_log: info
   rust_log_remote: debug,hyper=off
+  remoteLogAddress:
   nodeSelector: {}
   tolerations: []
   affinity: {}
@@ -30,18 +34,17 @@ validator:
     provide_genesis: true
     sync_only: false
     concurrency_level: 4
-    mempool_poll_count:
+    enable_state_sync_v2: true
     round_initial_timeout_ms:
+    quorum_store_poll_count: 1
     ledger_prune_window: 10000000
     state_store_prune_window: 1000000
     pruning_batch_size: 10000
-  exposeRestApi: false
 
 fullnode:
   groups:
   - name: fullnode
     replicas: 1
-    enableRestApi: true
   resources:
     limits:
       cpu: 3.5
@@ -84,12 +87,20 @@ haproxy:
   tls_secret:
 
 service:
-  external:
-    type: LoadBalancer
+  domain:
   validator:
+    external: 
+      type: LoadBalancer
     loadBalancerSourceRanges:
+    enableRestApi: true
+    enableMetricsPort: true
+  # NOTE: these values apply for all fullnode groups
   fullnode:
+    external: 
+      type: LoadBalancer
     loadBalancerSourceRanges:
+    enableRestApi: true
+    enableMetricsPort: true
 
 serviceAccount:
   # Specifies whether a service account should be created

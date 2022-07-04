@@ -3,6 +3,7 @@ module AptosFramework::Genesis {
     use Std::Event;
     use Std::Vector;
     use AptosFramework::Account;
+    use AptosFramework::Coin;
     use AptosFramework::ConsensusConfig;
     use AptosFramework::TransactionPublishingOption;
     use AptosFramework::Version;
@@ -10,8 +11,9 @@ module AptosFramework::Genesis {
     use AptosFramework::ChainId;
     use AptosFramework::Reconfiguration;
     use AptosFramework::Stake;
-    use AptosFramework::TestCoin;
+    use AptosFramework::TestCoin::{Self, TestCoin};
     use AptosFramework::Timestamp;
+    use AptosFramework::TransactionFee;
     use AptosFramework::VMConfig;
 
     fun initialize(
@@ -28,6 +30,11 @@ module AptosFramework::Genesis {
         epoch_interval: u64,
         minimum_stake: u64,
         maximum_stake: u64,
+        min_lockup_duration_secs: u64,
+        max_lockup_duration_secs: u64,
+        allow_validator_set_change: bool,
+        rewards_rate: u64,
+        rewards_rate_denominator: u64,
     ) {
         initialize_internal(
             &core_resource_account,
@@ -43,6 +50,11 @@ module AptosFramework::Genesis {
             epoch_interval,
             minimum_stake,
             maximum_stake,
+            min_lockup_duration_secs,
+            max_lockup_duration_secs,
+            allow_validator_set_change,
+            rewards_rate,
+            rewards_rate_denominator,
         )
     }
 
@@ -60,6 +72,11 @@ module AptosFramework::Genesis {
         epoch_interval: u64,
         minimum_stake: u64,
         maximum_stake: u64,
+        min_lockup_duration_secs: u64,
+        max_lockup_duration_secs: u64,
+        allow_validator_set_change: bool,
+        rewards_rate: u64,
+        rewards_rate_denominator: u64,
     ) {
         // initialize the core resource account
         Account::initialize(
@@ -78,12 +95,20 @@ module AptosFramework::Genesis {
         Account::rotate_authentication_key_internal(core_resource_account, copy core_resource_account_auth_key);
         // initialize the core framework account
         let core_framework_account = Account::create_core_framework_account();
-        Account::rotate_authentication_key_internal(&core_framework_account, core_resource_account_auth_key);
 
         // Consensus config setup
         ConsensusConfig::initialize(core_resource_account);
         Version::initialize(core_resource_account, initial_version);
-        Stake::initialize_validator_set(core_resource_account, minimum_stake, maximum_stake);
+        Stake::initialize_validator_set(
+            core_resource_account,
+            minimum_stake,
+            maximum_stake,
+            min_lockup_duration_secs,
+            max_lockup_duration_secs,
+            allow_validator_set_change,
+            rewards_rate,
+            rewards_rate_denominator,
+        );
 
         VMConfig::initialize(
             core_resource_account,
@@ -96,8 +121,15 @@ module AptosFramework::Genesis {
 
         TransactionPublishingOption::initialize(core_resource_account, initial_script_allow_list, is_open_module);
 
-        TestCoin::initialize(core_resource_account, 1000000);
-        TestCoin::mint_internal(core_resource_account, Signer::address_of(core_resource_account), 18446744073709551615);
+        // This is testnet-specific configuration and can be skipped for mainnet.
+        // Mainnet can call Coin::initialize<MainnetCoin> directly and give mint capability to the Staking module.
+        let (mint_cap, burn_cap) = TestCoin::initialize(&core_framework_account, core_resource_account);
+
+        // Give Stake MintCapability<TestCoin> so it can mint rewards.
+        Stake::store_test_coin_mint_cap(core_resource_account, mint_cap);
+
+        // Give TransactionFee BurnCapability<TestCoin> so it can burn gas.
+        TransactionFee::store_test_coin_burn_cap(&core_framework_account, burn_cap);
 
         // Pad the event counter for the Root account to match DPN. This
         // _MUST_ match the new epoch event counter otherwise all manner of
@@ -114,25 +146,24 @@ module AptosFramework::Genesis {
 
     /// Sets up the initial validator set for the network.
     /// The validator "owner" accounts, and their authentication
-    /// keys are encoded in the `owners` and `owner_auth_key` vectors.
+    /// Addresses (and keys) are encoded in the `owners`
     /// Each validator signs consensus messages with the private key corresponding to the Ed25519
     /// public key in `consensus_pubkeys`.
     /// Finally, each validator must specify the network address
     /// (see types/src/network_address/mod.rs) for itself and its full nodes.
+    ///
+    /// Network address fields are a vector per account, where each entry is a vector of addresses
+    /// encoded in a single BCS byte array.
     public(script) fun create_initialize_validators(
         core_resource_account: signer,
         owners: vector<address>,
-        owner_auth_keys: vector<vector<u8>>,
         consensus_pubkeys: vector<vector<u8>>,
         validator_network_addresses: vector<vector<u8>>,
         full_node_network_addresses: vector<vector<u8>>,
         staking_distribution: vector<u64>,
     ) {
         let num_owners = Vector::length(&owners);
-        let num_owner_keys = Vector::length(&owner_auth_keys);
-        assert!(num_owners == num_owner_keys, 0);
         let num_validator_network_addresses = Vector::length(&validator_network_addresses);
-        assert!(num_owner_keys == num_validator_network_addresses, 0);
         let num_full_node_network_addresses = Vector::length(&full_node_network_addresses);
         assert!(num_validator_network_addresses == num_full_node_network_addresses, 0);
         let num_staking = Vector::length(&staking_distribution);
@@ -142,24 +173,26 @@ module AptosFramework::Genesis {
         while (i < num_owners) {
             let owner = Vector::borrow(&owners, i);
             // create each validator account and rotate its auth key to the correct value
-            let (owner_account, _) = Account::create_account_internal(*owner);
-
-            let owner_auth_key = *Vector::borrow(&owner_auth_keys, i);
-            Account::rotate_authentication_key_internal(&owner_account, owner_auth_key);
+            let owner_account = Account::create_account_internal(*owner);
 
             // use the operator account set up the validator config
-            let validator_network_address = *Vector::borrow(&validator_network_addresses, i);
-            let full_node_network_address = *Vector::borrow(&full_node_network_addresses, i);
+            let cur_validator_network_addresses = *Vector::borrow(&validator_network_addresses, i);
+            let cur_full_node_network_addresses = *Vector::borrow(&full_node_network_addresses, i);
             let consensus_pubkey = *Vector::borrow(&consensus_pubkeys, i);
             Stake::register_validator_candidate(
                 &owner_account,
                 consensus_pubkey,
-                validator_network_address,
-                full_node_network_address
+                cur_validator_network_addresses,
+                cur_full_node_network_addresses,
             );
+            Stake::increase_lockup(&owner_account, 100000);
             let amount = *Vector::borrow(&staking_distribution, i);
-            Stake::delegate_stake(&core_resource_account, *owner, amount, 100000);
-            Stake::join_validator_set(&owner_account);
+            // Transfer coins from the root account to the validator, so they can stake and have non-zero voting power
+            // and can complete consensus on the genesis block.
+            Coin::register<TestCoin>(&owner_account);
+            Coin::transfer<TestCoin>(&core_resource_account, *owner, amount);
+            Stake::add_stake(&owner_account, amount);
+            Stake::join_validator_set_internal(&owner_account, *owner);
 
             i = i + 1;
         };
@@ -181,7 +214,12 @@ module AptosFramework::Genesis {
             1,
             0,
             0,
-            0
+            0,
+            0,
+            0,
+            true,
+            0,
+            1,
         )
     }
 

@@ -7,13 +7,13 @@ use crate::{
 };
 use anyhow::Result;
 use aptos_crypto::{hash::SPARSE_MERKLE_PLACEHOLDER_HASH, HashValue};
-use aptos_jellyfish_merkle::restore::JellyfishMerkleRestore;
+use aptos_jellyfish_merkle::restore::StateSnapshotRestore;
 use aptos_types::{
     contract_event::ContractEvent,
     ledger_info::LedgerInfoWithSignatures,
     proof::definition::LeafCount,
-    state_store::state_value::StateKeyAndValue,
-    transaction::{Transaction, TransactionInfo, Version, PRE_GENESIS_VERSION},
+    state_store::{state_key::StateKey, state_value::StateValue},
+    transaction::{Transaction, TransactionInfo, Version},
 };
 use schemadb::DB;
 use std::sync::Arc;
@@ -22,7 +22,7 @@ use storage_interface::{DbReader, TreeState};
 /// Provides functionalities for AptosDB data restore.
 #[derive(Clone)]
 pub struct RestoreHandler {
-    db: Arc<DB>,
+    ledger_db: Arc<DB>,
     pub aptosdb: Arc<AptosDB>,
     ledger_store: Arc<LedgerStore>,
     transaction_store: Arc<TransactionStore>,
@@ -32,7 +32,7 @@ pub struct RestoreHandler {
 
 impl RestoreHandler {
     pub(crate) fn new(
-        db: Arc<DB>,
+        ledger_db: Arc<DB>,
         aptosdb: Arc<AptosDB>,
         ledger_store: Arc<LedgerStore>,
         transaction_store: Arc<TransactionStore>,
@@ -40,7 +40,7 @@ impl RestoreHandler {
         event_store: Arc<EventStore>,
     ) -> Self {
         Self {
-            db,
+            ledger_db,
             aptosdb,
             ledger_store,
             transaction_store,
@@ -53,16 +53,21 @@ impl RestoreHandler {
         &self,
         version: Version,
         expected_root_hash: HashValue,
-    ) -> Result<JellyfishMerkleRestore<StateKeyAndValue>> {
-        JellyfishMerkleRestore::new_overwrite(
-            Arc::clone(&self.state_store),
+    ) -> Result<StateSnapshotRestore<StateKey, StateValue>> {
+        StateSnapshotRestore::new_overwrite(
+            &self.state_store.state_merkle_db,
+            &self.state_store,
             version,
             expected_root_hash,
         )
     }
 
     pub fn save_ledger_infos(&self, ledger_infos: &[LedgerInfoWithSignatures]) -> Result<()> {
-        restore_utils::save_ledger_infos(self.db.clone(), self.ledger_store.clone(), ledger_infos)
+        restore_utils::save_ledger_infos(
+            self.ledger_db.clone(),
+            self.ledger_store.clone(),
+            ledger_infos,
+        )
     }
 
     pub fn confirm_or_save_frozen_subtrees(
@@ -70,7 +75,11 @@ impl RestoreHandler {
         num_leaves: LeafCount,
         frozen_subtrees: &[HashValue],
     ) -> Result<()> {
-        restore_utils::confirm_or_save_frozen_subtrees(self.db.clone(), num_leaves, frozen_subtrees)
+        restore_utils::confirm_or_save_frozen_subtrees(
+            self.ledger_db.clone(),
+            num_leaves,
+            frozen_subtrees,
+        )
     }
 
     pub fn save_transactions(
@@ -81,7 +90,7 @@ impl RestoreHandler {
         events: &[Vec<ContractEvent>],
     ) -> Result<()> {
         restore_utils::save_transactions(
-            self.db.clone(),
+            self.ledger_db.clone(),
             self.ledger_store.clone(),
             self.transaction_store.clone(),
             self.event_store.clone(),
@@ -92,19 +101,16 @@ impl RestoreHandler {
         )
     }
 
-    pub fn get_tree_state(&self, num_transactions: LeafCount) -> Result<TreeState> {
+    pub fn get_tree_state(&self, version: Option<Version>) -> Result<TreeState> {
+        let num_transactions: LeafCount = version.map_or(0, |v| v + 1);
         let frozen_subtrees = self
             .ledger_store
             .get_frozen_subtree_hashes(num_transactions)?;
-        let state_root_hash = if num_transactions == 0 {
-            self.state_store
-                .get_root_hash_option(PRE_GENESIS_VERSION)?
-                .unwrap_or(*SPARSE_MERKLE_PLACEHOLDER_HASH)
-        } else {
-            self.state_store.get_root_hash(num_transactions - 1)?
+        let state_root_hash = match version {
+            None => *SPARSE_MERKLE_PLACEHOLDER_HASH,
+            Some(ver) => self.state_store.get_root_hash(ver)?,
         };
-
-        Ok(TreeState::new(
+        Ok(TreeState::new_at_state_checkpoint(
             num_transactions,
             frozen_subtrees,
             state_root_hash,

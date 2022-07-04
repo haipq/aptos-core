@@ -74,6 +74,9 @@ workspace-members = [
 
     # Don't consider since it includes excluded move crates
     "move-deps",
+
+    # Don't include these since they contain test features that we don't want in production.
+    "forge",
 ]
 
 [hakari.final-excludes]
@@ -81,11 +84,11 @@ third-party = [
     # Exclude the fail crate because the failpoints feature should only be enabled
     # for certain builds.
     { name = "fail" },
-    { name = "move-binary-format", git = "https://github.com/move-language/move", rev = "f2e7585b1ed5bd2810163d6bdebafe5a388881d3" },
-    { name = "move-core-types", git = "https://github.com/move-language/move", rev = "f2e7585b1ed5bd2810163d6bdebafe5a388881d3", features=["address32"] },
-    { name = "move-stdlib", git = "https://github.com/move-language/move", rev = "f2e7585b1ed5bd2810163d6bdebafe5a388881d3" },
-    { name = "move-vm-runtime", git = "https://github.com/move-language/move", rev = "f2e7585b1ed5bd2810163d6bdebafe5a388881d3" },
-    { name = "move-vm-types", git = "https://github.com/move-language/move", rev = "f2e7585b1ed5bd2810163d6bdebafe5a388881d3" },
+    { name = "move-binary-format", git = "https://github.com/move-language/move", rev = "ece13ae276e3925111bf48cd85b73af4287210e7" },
+    { name = "move-core-types", git = "https://github.com/move-language/move", rev = "ece13ae276e3925111bf48cd85b73af4287210e7", features=["address32"] },
+    { name = "move-stdlib", git = "https://github.com/move-language/move", rev = "ece13ae276e3925111bf48cd85b73af4287210e7" },
+    { name = "move-vm-runtime", git = "https://github.com/move-language/move", rev = "ece13ae276e3925111bf48cd85b73af4287210e7" },
+    { name = "move-vm-types", git = "https://github.com/move-language/move", rev = "ece13ae276e3925111bf48cd85b73af4287210e7" },
 ]
 
 # This follows the same syntax as CargoOptionsSummary in guppy.
@@ -126,6 +129,8 @@ whitespace-exceptions = [
     "**/*.errmap",
     "**/*.abi",
     "terraform/**/*",
+    "**/*.yaml",
+    "**/*.yml",
 ]
 
 license-exceptions = [
@@ -167,11 +172,12 @@ members = [
     # Please keep this list in alphabetical order!
 
     "testcases",
+    "aptos-faucet-cli",
     "aptos-fuzz",
     "aptos-fuzzer",
-    "aptos-keygen",
     "aptos-proptest-helpers",
     "aptos-retrier",
+    "aptos-rosetta-cli",
     "aptos-transaction-benchmarks",
     "aptos-writeset-generator",
     "executor-benchmark",
@@ -183,8 +189,10 @@ members = [
     "language-e2e-testsuite",
     "memsocket",
     "move-examples",
+    "peer-monitoring-service-client", # This will be removed once the peer monitoring service is plugged in
+    "peer-monitoring-service-server", # This will be removed once the peer monitoring service is plugged in
+    "peer-monitoring-service-types", # This will be removed once the peer monitoring service is plugged in
     "smoke-test",
-    "transaction-emitter",
     "x",
     "x-core",
     "x-lint",
@@ -248,17 +256,17 @@ mark-changed = "all"
 
 # Core devtools files.
 [[determinator.path-rule]]
-globs = [".config/nextest.toml", "scripts/dev_setup.sh", "x.toml"]
+globs = [".config/nextest.toml", "scripts/dev_setup.sh", "x.toml", ".node-version", ".prettierrc"]
 mark-changed = "all"
 
 [[determinator.path-rule]]
 # Ignore website and other ancillary files, and scripts not listed above.
-globs = ["dashboards/**", "developer-docs-site/**/*", "documentation/**/*", "docker/**/*", "language/documentation/**/*", "specifications/**/*", "scripts/**/*", "terraform/**/*"]
+globs = ["CODEOWNERS","dashboards/**", "developer-docs-site/**/*", "documentation/**/*", "docker/**/*", "language/documentation/**/*", "specifications/**/*", "scripts/**/*", "terraform/**/*", "crowdin.yml"]
 mark-changed = []
 
 [[determinator.path-rule]]
 # Ignore ecosytem typescript
-globs = ["ecosystem/typescript/**/*", "ecosystem/web-wallet/**/*", "ecosystem/platform/**/*"]
+globs = ["ecosystem/typescript/**/*", "ecosystem/python/**/*", "ecosystem/web-wallet/**/*", "ecosystem/platform/**/*", "ecosystem/indexer-server/*"]
 mark-changed = []
 
 [[determinator.path-rule]]

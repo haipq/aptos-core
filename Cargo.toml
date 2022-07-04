@@ -5,7 +5,6 @@ members = [
     "api",
     "api/types",
     "aptos-move/af-cli",
-    "aptos-move/aptos-keygen",
     "aptos-move/aptos-resource-viewer",
     "aptos-move/aptos-transaction-benchmarks",
     "aptos-move/aptos-validator-interface",
@@ -38,8 +37,11 @@ members = [
     "crates/aptos-crypto",
     "crates/aptos-crypto-derive",
     "crates/aptos-faucet",
+    "crates/aptos-faucet-cli",
+    "crates/aptos-genesis",
     "crates/aptos-id-generator",
     "crates/aptos-infallible",
+    "crates/aptos-keygen",
     "crates/aptos-log-derive",
     "crates/aptos-logger",
     "crates/aptos-metrics",
@@ -48,6 +50,8 @@ members = [
     "crates/aptos-rate-limiter",
     "crates/aptos-rest-client",
     "crates/aptos-retrier",
+    "crates/aptos-rosetta",
+    "crates/aptos-rosetta-cli",
     "crates/aptos-telemetry",
     "crates/aptos-temppath",
     "crates/aptos-time-service",
@@ -61,10 +65,12 @@ members = [
     "crates/proxy",
     "crates/short-hex-str",
     "crates/transaction-emitter",
+    "crates/transaction-emitter-lib",
     "devtools/x",
     "devtools/x-core",
     "devtools/x-lint",
     "ecosystem/indexer",
+    "ecosystem/node-checker",
     "execution/db-bootstrapper",
     "execution/executor",
     "execution/executor-benchmark",
@@ -76,6 +82,9 @@ members = [
     "network/discovery",
     "network/memsocket",
     "network/netcore",
+    "network/peer-monitoring-service/client",
+    "network/peer-monitoring-service/server",
+    "network/peer-monitoring-service/types",
     "sdk",
     "sdk/transaction-builder",
     "secure/net",
@@ -102,9 +111,7 @@ members = [
     "storage/schemadb",
     "storage/scratchpad",
     "storage/state-view",
-    "storage/storage-client",
     "storage/storage-interface",
-    "storage/storage-service",
     "testsuite/aptos-fuzzer",
     "testsuite/aptos-fuzzer/fuzz",
     "testsuite/forge",
@@ -132,16 +139,28 @@ default-members = [
     "consensus/safety-rules",
     "crates/aptos",
     "crates/aptos-faucet",
+    "crates/aptos-keygen",
     "crates/aptos-rate-limiter",
+    "crates/aptos-rosetta",
+    "crates/transaction-emitter",
     "aptos-move/framework",
     "aptos-move/transaction-builder-generator",
     "execution/db-bootstrapper",
     "storage/backup/backup-cli",
     "ecosystem/indexer",
+    "ecosystem/node-checker",
 ]
 
 [profile.release]
 debug = true
+
+[profile.cli]
+inherits = "release"
+debug = false
+opt-level = "z"
+lto = true
+strip = true
+codegen-units = 1
 
 [profile.bench]
 debug = true

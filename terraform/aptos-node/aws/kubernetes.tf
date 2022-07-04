@@ -95,7 +95,8 @@ resource "helm_release" "calico" {
 
 locals {
   helm_values = jsonencode({
-    imageTag = var.image_tag
+    numValidators = var.num_validators
+    imageTag      = var.image_tag
     chain = {
       era        = var.era
       chain_id   = var.chain_id
@@ -114,6 +115,7 @@ locals {
         value  = "validators"
         effect = "NoExecute"
       }]
+      remoteLogAddress = var.enable_logger ? "${local.workspace_name}-log-aptos-logger:5044" : null
     }
     fullnode = {
       storage = {
@@ -133,6 +135,9 @@ locals {
         "eks.amazonaws.com/nodegroup" = "utilities"
       }
     }
+    service = {
+      domain = local.domain
+    }
   })
 }
 
@@ -140,7 +145,7 @@ resource "helm_release" "validator" {
   count       = var.helm_enable_validator ? 1 : 0
   name        = local.workspace_name
   chart       = var.helm_chart != "" ? var.helm_chart : "${path.module}/../../helm/aptos-node"
-  max_history = 100
+  max_history = 5
   wait        = false
 
   values = [
@@ -159,7 +164,7 @@ resource "helm_release" "logger" {
   count       = var.enable_logger ? 1 : 0
   name        = "${local.workspace_name}-log"
   chart       = "${path.module}/../../helm/logger"
-  max_history = 10
+  max_history = 5
   wait        = false
 
   values = [
@@ -172,6 +177,7 @@ resource "helm_release" "logger" {
       }
       serviceAccount = {
         create = false
+        # this name must match the serviceaccount created by the aptos-node helm chart
         name = "${local.workspace_name}-aptos-node-validator"
       }
     }),
@@ -188,7 +194,7 @@ resource "helm_release" "monitoring" {
   count       = var.enable_monitoring ? 1 : 0
   name        = "${local.workspace_name}-mon"
   chart       = "${path.module}/../../helm/monitoring"
-  max_history = 10
+  max_history = 5
   wait        = false
 
   values = [
@@ -198,6 +204,9 @@ resource "helm_release" "monitoring" {
       }
       validator = {
         name = var.validator_name
+      }
+      service = {
+        domain   = local.domain
       }
       monitoring = {
         prometheus = {

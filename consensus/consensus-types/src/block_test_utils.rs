@@ -41,11 +41,12 @@ prop_compose! {
         parent_qc in Just(parent_qc)
     ) -> Block {
         Block::new_proposal(
-            vec![],
+            Payload::new_empty(),
             round,
             aptos_infallible::duration_since_epoch().as_micros() as u64,
             parent_qc,
             &signer,
+            Vec::new(),
         )
     }
 }
@@ -87,6 +88,7 @@ prop_compose! {
                 block_data: BlockData::new_proposal(
                     block.payload().unwrap().clone(),
                     block.author().unwrap(),
+                    (*block.block_data().failed_authors().unwrap()).clone(),
                     block.round(),
                     aptos_infallible::duration_since_epoch().as_micros() as u64,
                     block.quorum_cert().clone(),
@@ -268,15 +270,17 @@ pub fn certificate_for_genesis() -> QuorumCert {
 pub fn random_payload(count: usize) -> Payload {
     let address = AccountAddress::random();
     let signer = ValidatorSigner::random(None);
-    (0..count)
-        .map(|i| {
-            get_test_signed_txn(
-                address,
-                i as u64,
-                signer.private_key(),
-                signer.public_key(),
-                None,
-            )
-        })
-        .collect()
+    Payload::DirectMempool(
+        (0..count)
+            .map(|i| {
+                get_test_signed_txn(
+                    address,
+                    i as u64,
+                    signer.private_key(),
+                    signer.public_key(),
+                    None,
+                )
+            })
+            .collect(),
+    )
 }

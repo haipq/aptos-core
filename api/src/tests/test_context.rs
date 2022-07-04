@@ -1,15 +1,17 @@
 // Copyright (c) Aptos
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{context::Context, index, tests::pretty};
+use crate::{
+    context::Context,
+    index,
+    tests::{golden_output::GoldenOutputs, pretty},
+};
 use aptos_api_types::{
     mime_types, HexEncodedBytes, TransactionOnChainData, X_APTOS_CHAIN_ID,
     X_APTOS_LEDGER_TIMESTAMP, X_APTOS_LEDGER_VERSION,
 };
-use aptos_config::config::ApiConfig;
+use aptos_config::config::NodeConfig;
 use aptos_crypto::{hash::HashValue, SigningKey};
-use aptos_genesis_tool::validator_builder::{RootKeys, ValidatorBuilder};
-use aptos_global_constants::OWNER_ACCOUNT;
 use aptos_mempool::mocks::MockSharedMempool;
 use aptos_sdk::{
     transaction_builder::TransactionFactory,
@@ -18,7 +20,6 @@ use aptos_sdk::{
         LocalAccount,
     },
 };
-use aptos_secure_storage::KVStorage;
 use aptos_temppath::TempPath;
 use aptos_types::{
     account_address::AccountAddress,
@@ -31,17 +32,17 @@ use aptos_types::{
 use aptos_vm::AptosVM;
 use aptosdb::AptosDB;
 use bytes::Bytes;
-use executor::db_bootstrapper;
+use executor::{block_executor::BlockExecutor, db_bootstrapper};
 use executor_types::BlockExecutorTrait;
 use hyper::Response;
 use mempool_notifications::MempoolNotificationSender;
 use storage_interface::DbReaderWriter;
 
-use crate::tests::golden_output::GoldenOutputs;
-use executor::block_executor::BlockExecutor;
+use aptos_config::keys::ConfigKey;
+use aptos_crypto::ed25519::Ed25519PrivateKey;
 use rand::SeedableRng;
 use serde_json::{json, Value};
-use std::{boxed::Box, collections::BTreeMap, sync::Arc};
+use std::{boxed::Box, collections::BTreeMap, iter::once, sync::Arc};
 use storage_interface::state_view::DbStateView;
 use vm_validator::vm_validator::VMValidator;
 use warp::http::header::CONTENT_TYPE;
@@ -51,13 +52,17 @@ pub fn new_test_context(test_name: &'static str) -> TestContext {
     tmp_dir.create_as_dir().unwrap();
 
     let mut rng = ::rand::rngs::StdRng::from_seed([0u8; 32]);
-    let builder =
-        ValidatorBuilder::new(&tmp_dir, cached_framework_packages::module_blobs().to_vec())
-            .min_price_per_gas_unit(0)
-            .randomize_first_validator_ports(false);
+    let builder = aptos_genesis::builder::Builder::new(
+        tmp_dir.path(),
+        cached_framework_packages::module_blobs().to_vec(),
+    )
+    .unwrap()
+    .with_min_price_per_gas_unit(0)
+    .with_randomize_first_validator_ports(false);
 
-    let (root_keys, genesis, genesis_waypoint, validators) = builder.build(&mut rng).unwrap();
-    let validator_owner = validators[0].storage().get(OWNER_ACCOUNT).unwrap().value;
+    let (root_key, genesis, genesis_waypoint, validators) = builder.build(&mut rng).unwrap();
+    let (validator_identity, _, _) = validators[0].get_key_objects(None).unwrap();
+    let validator_owner = validator_identity.account_address.unwrap();
 
     let (db, db_rw) = DbReaderWriter::wrap(AptosDB::new_for_test(&tmp_dir));
     let ret =
@@ -71,10 +76,10 @@ pub fn new_test_context(test_name: &'static str) -> TestContext {
             ChainId::test(),
             db.clone(),
             mempool.ac_client.clone(),
-            ApiConfig::default(),
+            NodeConfig::default(),
         ),
         rng,
-        root_keys,
+        root_key,
         validator_owner,
         Box::new(BlockExecutor::<AptosVM>::new(db_rw)),
         mempool,
@@ -90,7 +95,7 @@ pub struct TestContext {
     pub mempool: Arc<MockSharedMempool>,
     pub db: Arc<AptosDB>,
     rng: rand::rngs::StdRng,
-    root_keys: Arc<RootKeys>,
+    root_key: ConfigKey<Ed25519PrivateKey>,
     executor: Arc<dyn BlockExecutorTrait>,
     expect_status_code: u16,
     test_name: &'static str,
@@ -102,7 +107,7 @@ impl TestContext {
     pub fn new(
         context: Context,
         rng: rand::rngs::StdRng,
-        root_keys: RootKeys,
+        root_key: Ed25519PrivateKey,
         validator_owner: AccountAddress,
         executor: Box<dyn BlockExecutorTrait>,
         mempool: MockSharedMempool,
@@ -112,7 +117,7 @@ impl TestContext {
         Self {
             context,
             rng,
-            root_keys: Arc::new(root_keys),
+            root_key: ConfigKey::new(root_key),
             validator_owner,
             executor: executor.into(),
             mempool: Arc::new(mempool),
@@ -145,7 +150,7 @@ impl TestContext {
     }
 
     pub fn root_account(&self) -> LocalAccount {
-        LocalAccount::new(aptos_root_address(), self.root_keys.root_key.clone(), 0)
+        LocalAccount::new(aptos_root_address(), self.root_key.private_key(), 0)
     }
 
     pub fn latest_state_view(&self) -> DbStateView {
@@ -224,15 +229,22 @@ impl TestContext {
                     .cloned()
                     .map(Transaction::UserTransaction),
             )
+            .chain(once(Transaction::StateCheckpoint))
             .collect();
 
+        // Check that txn execution was successful.
         let parent_id = self.executor.committed_block_id();
         let result = self
             .executor
             .execute_block((metadata.id(), txns.clone()), parent_id)
             .unwrap();
-
-        assert_eq!(result.compute_status().len(), txns.len(), "{:?}", result);
+        let mut compute_status = result.compute_status().clone();
+        assert_eq!(compute_status.len(), txns.len(), "{:?}", result);
+        if matches!(compute_status.last(), Some(TransactionStatus::Retry)) {
+            // a state checkpoint txn can be Retry if prefixed by a write set txn
+            compute_status.pop();
+        }
+        // But the rest of the txns must be Kept.
         for st in result.compute_status() {
             match st {
                 TransactionStatus::Discard(st) => panic!("transaction is discarded: {:?}", st),
@@ -240,6 +252,7 @@ impl TestContext {
                 TransactionStatus::Keep(_) => (),
             }
         }
+
         self.executor
             .commit_blocks(
                 vec![metadata.id()],
@@ -394,7 +407,15 @@ impl TestContext {
         let id = HashValue::random_with_rng(&mut self.rng);
         self.fake_time += 1;
         let timestamp = self.fake_time;
-        BlockMetadata::new(id, 0, round, vec![false], self.validator_owner, timestamp)
+        BlockMetadata::new(
+            id,
+            0,
+            round,
+            vec![false],
+            self.validator_owner,
+            vec![],
+            timestamp,
+        )
     }
 
     fn new_ledger_info(

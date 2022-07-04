@@ -8,19 +8,23 @@ variable "k8s_api_sources" {
   default     = ["0.0.0.0/0"]
 }
 
+variable "num_validators" {
+  default = 1
+}
+
 variable "era" {
   description = "Chain era, used to start a clean chain"
-  default = 1
+  default     = 1
 }
 
 variable "chain_id" {
   description = "Aptos chain ID"
-  default = "TESTING"
+  default     = "TESTING"
 }
 
 variable "chain_name" {
   description = "Aptos chain name"
-  default = "testnet"
+  default     = "testnet"
 }
 
 variable "validator_name" {
@@ -38,9 +42,19 @@ variable "zone_id" {
   default     = ""
 }
 
+variable "workspace_dns" {
+  description = "Include Terraform workspace name in DNS records"
+  default     = true
+}
+
 variable "record_name" {
   description = "DNS record name to use (<workspace> is replaced with the TF workspace name)"
   default     = "<workspace>.aptos"
+}
+
+variable "create_records" {
+  description = "Creates DNS records in var.zone_id that point to k8s service, as opposed to using external-dns or other means"
+  default     = true
 }
 
 variable "helm_chart" {
@@ -120,11 +134,6 @@ variable "helm_enable_validator" {
   default     = true
 }
 
-variable "helm_release_name" {
-  description = "Override the Helm release name used when referencing Kubernetes service accounts"
-  default     = ""
-}
-
 variable "utility_instance_type" {
   description = "Instance type used for utilities"
   default     = "t3.medium"
@@ -133,6 +142,16 @@ variable "utility_instance_type" {
 variable "utility_instance_num" {
   description = "Number of instances for utilities"
   default     = 1
+}
+
+variable "utility_instance_min_num" {
+  description = "Minimum number of instances for utilities"
+  default     = 1
+}
+
+variable "utility_instance_max_num" {
+  description = "Maximum number of instances for utilities. If left 0, defaults to 2 * var.utility_instance_num"
+  default     = 0
 }
 
 variable "validator_instance_type" {
@@ -145,10 +164,14 @@ variable "validator_instance_num" {
   default     = 2
 }
 
-variable "node_pool_sizes" {
-  type        = map(number)
-  default     = {}
-  description = "Override the number of nodes in the specified pool"
+variable "validator_instance_min_num" {
+  description = "Minimum number of instances for validators"
+  default     = 1
+}
+
+variable "validator_instance_max_num" {
+  description = "Maximum number of instances for utilities. If left 0, defaults to 2 * var.validator_instance_num"
+  default     = 0
 }
 
 variable "workspace_name_override" {
@@ -157,7 +180,7 @@ variable "workspace_name_override" {
 }
 
 variable "enable_logger" {
-  description = "Enable logger pod"
+  description = "Enable logger helm chart"
   default     = false
 }
 
@@ -168,7 +191,7 @@ variable "logger_helm_values" {
 }
 
 variable "enable_monitoring" {
-  description = "Enable logger pod"
+  description = "Enable monitoring helm chart"
   default     = false
 }
 

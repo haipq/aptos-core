@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use aptos_crypto::HashValue;
 use aptos_temppath::TempPath;
 use aptos_types::state_store::{state_key::StateKey, state_value::StateValue};
+use storage_interface::{jmt_update_refs, jmt_updates, DbReader};
 
 use crate::{change_set::ChangeSet, pruner::*, state_store::StateStore, AptosDB};
 
@@ -15,17 +16,26 @@ fn put_value_set(
     value_set: Vec<(StateKey, StateValue)>,
     version: Version,
 ) -> HashValue {
-    let mut cs = ChangeSet::new();
     let value_set: HashMap<_, _> = value_set
         .iter()
         .map(|(key, value)| (key.clone(), value.clone()))
         .collect();
+    let jmt_updates = jmt_updates(&value_set);
 
     let root = state_store
-        .put_value_sets(vec![&value_set], None, version, &mut cs)
-        .unwrap()[0];
+        .merklize_value_set(
+            jmt_update_refs(&jmt_updates),
+            None,
+            version,
+            version.checked_sub(1),
+        )
+        .unwrap();
+
+    let mut cs = ChangeSet::new();
+    state_store
+        .put_value_sets(vec![&value_set], version, &mut cs)
+        .unwrap();
     db.write_schemas(cs.batch).unwrap();
-    state_store.set_latest_version(version);
 
     root
 }
@@ -37,7 +47,7 @@ fn verify_state_in_store(
     version: Version,
 ) {
     let (value, _proof) = state_store
-        .get_value_with_proof_by_version(&key, version)
+        .get_state_value_with_proof_by_version(&key, version)
         .unwrap();
 
     assert_eq!(value.as_ref(), expected_value);
@@ -51,19 +61,18 @@ fn test_state_store_pruner() {
     let num_versions = 25;
     let tmp_dir = TempPath::new();
     let aptos_db = AptosDB::new_for_test(&tmp_dir);
-    let db = aptos_db.db;
-    let state_store = &StateStore::new(Arc::clone(&db));
-    let transaction_store = &aptos_db.transaction_store;
+    let state_store = &StateStore::new(
+        Arc::clone(&aptos_db.ledger_db),
+        Arc::clone(&aptos_db.state_merkle_db),
+    );
     let pruner = Pruner::new(
-        Arc::clone(&db),
+        Arc::clone(&aptos_db.ledger_db),
+        Arc::clone(&aptos_db.state_merkle_db),
         StoragePrunerConfig {
             state_store_prune_window: Some(0),
             ledger_prune_window: Some(0),
             pruning_batch_size: prune_batch_size,
         },
-        Arc::clone(transaction_store),
-        Arc::clone(&aptos_db.ledger_store),
-        Arc::clone(&aptos_db.event_store),
     );
 
     let mut root_hashes = vec![];
@@ -71,7 +80,7 @@ fn test_state_store_pruner() {
     for i in 0..num_versions {
         let value = StateValue::from(vec![i as u8]);
         root_hashes.push(put_value_set(
-            &db,
+            &aptos_db.ledger_db,
             state_store,
             vec![(key.clone(), value.clone())],
             i as u64, /* version */
@@ -116,10 +125,81 @@ fn test_state_store_pruner() {
             .unwrap();
         for i in 0..prune_batch_size {
             assert!(state_store
-                .get_value_with_proof_by_version(&key, i as u64)
+                .get_state_value_with_proof_by_version(&key, i as u64)
                 .is_err());
         }
         for i in prune_batch_size..num_versions as usize {
+            verify_state_in_store(
+                state_store,
+                key.clone(),
+                Some(&StateValue::from(vec![i as u8])),
+                i as u64,
+            );
+        }
+    }
+}
+
+#[test]
+fn test_state_store_pruner_disabled() {
+    let key = StateKey::Raw(String::from("test_key1").into_bytes());
+
+    let prune_batch_size = 10;
+    let num_versions = 25;
+    let tmp_dir = TempPath::new();
+    let aptos_db = AptosDB::new_for_test(&tmp_dir);
+    let state_store = &StateStore::new(
+        Arc::clone(&aptos_db.ledger_db),
+        Arc::clone(&aptos_db.state_merkle_db),
+    );
+    let pruner = Pruner::new(
+        Arc::clone(&aptos_db.ledger_db),
+        Arc::clone(&aptos_db.state_merkle_db),
+        StoragePrunerConfig {
+            state_store_prune_window: None,
+            ledger_prune_window: Some(0),
+            pruning_batch_size: prune_batch_size,
+        },
+    );
+
+    let mut root_hashes = vec![];
+    // Insert 25 values in the db.
+    for i in 0..num_versions {
+        let value = StateValue::from(vec![i as u8]);
+        root_hashes.push(put_value_set(
+            &aptos_db.ledger_db,
+            state_store,
+            vec![(key.clone(), value.clone())],
+            i as u64, /* version */
+        ));
+    }
+
+    // Prune till version=0. This should basically be a no-op
+    {
+        pruner
+            .ensure_disabled(PrunerIndex::StateStorePrunerIndex as usize)
+            .unwrap();
+        for i in 0..num_versions {
+            verify_state_in_store(
+                state_store,
+                key.clone(),
+                Some(&StateValue::from(vec![i as u8])),
+                i,
+            );
+        }
+    }
+
+    // Notify the pruner to update the version to be 10 - since we use a batch size of 10,
+    // we expect versions 0 to 9 to be pruned.
+    {
+        pruner
+            .ensure_disabled(PrunerIndex::StateStorePrunerIndex as usize)
+            .unwrap();
+        for i in 0..prune_batch_size {
+            assert!(state_store
+                .get_state_value_with_proof_by_version(&key, i as u64)
+                .is_ok());
+        }
+        for i in 0..num_versions as usize {
             verify_state_in_store(
                 state_store,
                 key.clone(),
@@ -140,8 +220,8 @@ fn test_worker_quit_eagerly() {
 
     let tmp_dir = TempPath::new();
     let aptos_db = AptosDB::new_for_test(&tmp_dir);
-    let db = aptos_db.db;
-    let state_store = &StateStore::new(Arc::clone(&db));
+    let db = aptos_db.ledger_db;
+    let state_store = &StateStore::new(Arc::clone(&db), Arc::clone(&aptos_db.state_merkle_db));
 
     let _root0 = put_value_set(
         &db,
@@ -166,21 +246,23 @@ fn test_worker_quit_eagerly() {
         let (command_sender, command_receiver) = channel();
         let worker = Worker::new(
             Arc::clone(&db),
-            Arc::clone(&aptos_db.transaction_store),
-            Arc::clone(&aptos_db.ledger_store),
-            Arc::clone(&aptos_db.event_store),
+            Arc::clone(&aptos_db.state_merkle_db),
             command_receiver,
-            Arc::new(Mutex::new(vec![0, 0])), /* progress */
-            100,
+            Arc::new(Mutex::new(vec![Some(0), Some(0)])), /* progress */
+            StoragePrunerConfig {
+                state_store_prune_window: Some(1),
+                ledger_prune_window: Some(1),
+                pruning_batch_size: 100,
+            },
         );
         command_sender
             .send(Command::Prune {
-                target_db_versions: vec![1, 0],
+                target_db_versions: vec![Some(1), Some(0)],
             })
             .unwrap();
         command_sender
             .send(Command::Prune {
-                target_db_versions: vec![2, 0],
+                target_db_versions: vec![Some(2), Some(0)],
             })
             .unwrap();
         command_sender.send(Command::Quit).unwrap();

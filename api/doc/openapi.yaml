@@ -6,7 +6,7 @@ info:
   license:
     name: Apache 2.0
     url: https://www.apache.org/licenses/LICENSE-2.0.html
-  version: 0.1.1
+  version: 0.1.2
   contact:
     name: Aptos
     url: https://github.com/aptos-labs/aptos-core
@@ -272,6 +272,44 @@ paths:
           $ref: '#/components/responses/415'
         "500":
           $ref: '#/components/responses/500'
+  /transactions/simulate:
+    post:
+      summary: Simulate transaction
+      operationId: simulate_transaction
+      description: |
+        **Submit transaction for simulation result using JSON **
+
+          * Create a SignedTransaction with zero-padded signature
+          * Submit the user transaction request with the zero-padded siganture.
+          * The request header "Content-Type" must set to "application/json".
+
+      tags:
+        - transactions
+      requestBody:
+        description: |
+          User transaction request with transaction sender's signature.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitTransactionRequest'
+      responses:
+        "200":
+          description: Transaction simulation completed.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OnChainTransaction'
+        "400":
+          $ref: '#/components/responses/400'
+        "413":
+          $ref: '#/components/responses/413'
+        "415":
+          $ref: '#/components/responses/415'
+        "500":
+          $ref: '#/components/responses/500'
   /accounts/{address}/transactions:
     get:
       summary: Get account transactions
@@ -356,12 +394,12 @@ paths:
       tags:
         - transactions
       requestBody:
-        description: User transaction request
+        description: User create signing message request
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UserTransactionRequest'
+              $ref: '#/components/schemas/UserCreateSigningMessageRequest'
       responses:
         "200":
           description: |
@@ -1056,7 +1094,6 @@ components:
         - sequence_number
         - max_gas_amount
         - gas_unit_price
-        - gas_currency_code
         - expiration_timestamp_secs
         - payload
       properties:
@@ -1075,6 +1112,16 @@ components:
           $ref: '#/components/schemas/TimestampSec'
         payload:
           $ref: '#/components/schemas/TransactionPayload'
+    UserCreateSigningMessageRequest:
+      title: User Create Signing Message Request
+      allOf:
+        - $ref: '#/components/schemas/UserTransactionRequest'
+        - type: object
+          properties:
+            secondary_signers:
+              type: array
+              items:
+                $ref: '#/components/schemas/Address'
     UserTransactionSignature:
       title: User Transaction Signature
       type: object
@@ -1091,8 +1138,15 @@ components:
         - $ref: '#/components/schemas/GenesisTransaction'
         - $ref: '#/components/schemas/UserTransaction'
         - $ref: '#/components/schemas/BlockMetadataTransaction'
+        - $ref: '#/components/schemas/StateCheckpointTransaction'
       discriminator:
         propertyName: type
+        mapping:
+          pending_transaction: '#/components/schemas/PendingTransaction'
+          genesis_transaction: '#/components/schemas/GenesisTransaction'
+          user_transaction: '#/components/schemas/UserTransaction'
+          block_metadata_transaction: '#/components/schemas/BlockMetadataTransaction'
+          state_checkpoint_transaction: '#/components/schemas/StateCheckpointTransaction'
     SubmitTransactionRequest:
       title: Submit Transaction Request
       type: object
@@ -1120,8 +1174,14 @@ components:
         - $ref: '#/components/schemas/GenesisTransaction'
         - $ref: '#/components/schemas/UserTransaction'
         - $ref: '#/components/schemas/BlockMetadataTransaction'
+        - $ref: '#/components/schemas/StateCheckpointTransaction'
       discriminator:
         propertyName: type
+        mapping:
+          genesis_transaction: '#/components/schemas/GenesisTransaction'
+          user_transaction: '#/components/schemas/UserTransaction'
+          block_metadata_transaction: '#/components/schemas/BlockMetadataTransaction'
+          state_checkpoint_transaction: '#/components/schemas/StateCheckpointTransaction'
     OnChainTransactionInfo:
       title: On-chain transaction information
       type: object
@@ -1229,6 +1289,20 @@ components:
             payload:
               $ref: '#/components/schemas/WriteSetPayload'
         - $ref: '#/components/schemas/OnChainTransactionInfo'
+    StateCheckpointTransaction:
+      title: State Checkpoint Transaction
+      type: object
+      allOf:
+        - required:
+            - type
+            - timestamp
+          properties:
+            type:
+              type: string
+              example: "state_checkpoint_transaction"
+            timestamp:
+              $ref: '#/components/schemas/TimestampUsec'
+        - $ref: '#/components/schemas/OnChainTransactionInfo'
     TransactionPayload:
       title: Transaction Payload
       oneOf:
@@ -1238,6 +1312,11 @@ components:
         - $ref: '#/components/schemas/WriteSetPayload'
       discriminator:
         propertyName: type
+        mapping:
+          script_function_payload: '#/components/schemas/ScriptFunctionPayload'
+          script_payload: '#/components/schemas/ScriptPayload'
+          module_bundle_payload: '#/components/schemas/ModuleBundlePayload'
+          write_set_payload: '#/components/schemas/WriteSetPayload'
     ScriptFunctionPayload:
       title: Script Function Payload
       type: object
@@ -1336,6 +1415,9 @@ components:
         - $ref: '#/components/schemas/DirectWriteSet'
       discriminator:
         propertyName: type
+        mapping:
+          script_write_set: '#/components/schemas/ScriptWriteSet'
+          direct_write_set: '#/components/schemas/DirectWriteSet'
     ScriptWriteSet:
       title: Script WriteSet
       type: object
@@ -1380,6 +1462,13 @@ components:
         - $ref: '#/components/schemas/WriteTableItem'
       discriminator:
         propertyName: type
+        mapping:
+          delete_module: '#/components/schemas/DeleteModule'
+          delete_resource: '#/components/schemas/DeleteResource'
+          delete_table_item: '#/components/schemas/DeleteTableItem'
+          write_module: '#/components/schemas/WriteModule'
+          write_resource: '#/components/schemas/WriteResource'
+          write_table_item: '#/components/schemas/WriteTableItem'
     DeleteModule:
       title: Delete Module
       type: object
@@ -1487,27 +1576,21 @@ components:
       required:
         - type
         - state_key_hash
-        - data
+        - handle
+        - key
+        - value
       properties:
         type:
           type: string
           example: "write_table_item"
         state_key_hash:
           $ref: '#/components/schemas/HexEncodedBytes'
-        data:
-          title: Table item write
-          type: object
-          required:
-            - handle
-            - key
-            - value
-          properties:
-            handle:
-              $ref: '#/components/schemas/HexEncodedBytes'
-            key:
-              $ref: '#/components/schemas/HexEncodedBytes'
-            value:
-              $ref: '#/components/schemas/HexEncodedBytes'
+        handle:
+          $ref: '#/components/schemas/HexEncodedBytes'
+        key:
+          $ref: '#/components/schemas/HexEncodedBytes'
+        value:
+          $ref: '#/components/schemas/HexEncodedBytes'
     Script:
       title: Script
       type: object
@@ -1616,11 +1699,15 @@ components:
         - $ref: '#/components/schemas/MultiAgentSignature'
       discriminator:
         propertyName: type
+        mapping:
+          ed25519_signature: '#/components/schemas/Ed25519Signature'
+          multi_ed25519_signature: '#/components/schemas/MultiEd25519Signature'
+          multi_agent_signature: '#/components/schemas/MultiAgentSignature'
     Ed25519Signature:
       title: Ed25519 Signature
       type: object
       description: |
-        Please refer to https://github.com/aptos-labs/aptos-core/tree/main/specifications/crypto#signature-and-verification for
+        Please refer to https://github.com/aptos-labs/aptos-core/tree/main/documentation/specifications/crypto#signature-and-verification for
         more details.
       required:
         - type
@@ -1638,7 +1725,7 @@ components:
       title: Multi-ed25519 Signature
       type: object
       description: |
-        Multi ed25519 signature, please refer to https://github.com/aptos-labs/aptos-core/tree/main/specifications/crypto#multi-signatures for more details.
+        Multi ed25519 signature, please refer to https://github.com/aptos-labs/aptos-core/tree/main/documentation/specifications/crypto#multi-signatures for more details.
       required:
         - type
         - public_keys
@@ -1695,6 +1782,9 @@ components:
         - $ref: '#/components/schemas/MultiEd25519Signature'
       discriminator:
         propertyName: type
+        mapping:
+          ed25519_signature: '#/components/schemas/Ed25519Signature'
+          multi_ed25519_signature: '#/components/schemas/MultiEd25519Signature'
     TableItemRequest:
       title: Table item request
       type: object
@@ -1709,3 +1799,58 @@ components:
           $ref: '#/components/schemas/MoveTypeId'
         key:
           $ref: '#/components/schemas/MoveValue'
+    TokenData:
+      title: Token Data
+      type: object
+      required:
+        - collection
+        - description
+        - name
+        - supply
+        - uri
+      properties:
+        collection:
+          type: string
+          description: Unique name within this creator's account for this Token's collection
+        description:
+          type: string
+          description: Description of Token
+        name:
+          type: string
+          description: Name of Token
+        maximum:
+          type: integer
+          description: Optional maximum number of this Token
+        supply:
+          type: integer
+          description: Total number of this type of Token
+        uri:
+          type: string
+          description: URL for additional information / media
+    TokenId:
+      type: object
+      required:
+        - creator
+        - collection
+        - name
+      properties:
+        creator:
+          type: string
+          description: Token creator address
+        collection:
+          type: string
+          description: Unique name within this creator's account for this Token's collection
+        name:
+          type: string
+          description: Name of Token
+    Token:
+      type: object
+      required:
+        - id
+        - value
+      properties:
+        id:
+          $ref: '#/components/schemas/TokenId'
+        value:
+          type: integer
+      

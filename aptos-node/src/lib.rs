@@ -4,7 +4,7 @@
 use aptos_api::runtime::bootstrap as bootstrap_api;
 use aptos_config::{
     config::{
-        AptosDataClientConfig, DataStreamingServiceConfig, NetworkConfig, NodeConfig,
+        AptosDataClientConfig, BaseConfig, DataStreamingServiceConfig, NetworkConfig, NodeConfig,
         PersistableConfig, StorageServiceConfig,
     },
     network_id::NetworkId,
@@ -13,19 +13,12 @@ use aptos_config::{
 use aptos_data_client::aptosnet::AptosNetDataClient;
 use aptos_infallible::RwLock;
 use aptos_logger::{prelude::*, Logger};
-use aptos_metrics::{get_public_json_metrics, metric_server};
+use aptos_metrics::metric_server;
 use aptos_state_view::account_with_state_view::AsAccountWithStateView;
-use aptos_telemetry::{
-    constants::{
-        APTOS_NODE_PUSH_METRICS, CHAIN_ID_METRIC, NODE_PUSH_TIME_SECS, PEER_ID_METRIC,
-        SYNCED_VERSION_METRIC,
-    },
-    send_env_data,
-};
 use aptos_time_service::TimeService;
 use aptos_types::{
     account_config::aptos_root_address, account_view::AccountView, chain_id::ChainId,
-    move_resource::MoveStorage, on_chain_config::ON_CHAIN_CONFIG_REGISTRY, waypoint::Waypoint,
+    on_chain_config::ON_CHAIN_CONFIG_REGISTRY, waypoint::Waypoint,
 };
 use aptos_vm::AptosVM;
 use aptosdb::AptosDB;
@@ -39,7 +32,7 @@ use data_streaming_service::{
 use debug_interface::node_debug_service::NodeDebugService;
 use event_notifications::EventSubscriptionService;
 use executor::{chunk_executor::ChunkExecutor, db_bootstrapper::maybe_bootstrap};
-use futures::channel::mpsc::channel;
+use futures::{channel::mpsc::channel, stream::StreamExt};
 use mempool_notifications::MempoolNotificationSender;
 use network::application::storage::PeerMetadataStorage;
 use network_builder::builder::NetworkBuilder;
@@ -58,10 +51,9 @@ use std::{
         Arc,
     },
     thread,
-    time::Instant,
+    time::{Instant, SystemTime, UNIX_EPOCH},
 };
-use storage_interface::{state_view::DbStateViewAtVersion, DbReaderWriter};
-use storage_service::start_storage_service_with_db;
+use storage_interface::{state_view::LatestDbStateCheckpointView, DbReaderWriter};
 use storage_service_client::{StorageServiceClient, StorageServiceMultiSender};
 use storage_service_server::{
     network::StorageServiceNetworkEvents, StorageReader, StorageServiceServer,
@@ -81,7 +73,7 @@ pub struct AptosHandle {
     _mempool: Runtime,
     _network_runtimes: Vec<Runtime>,
     _state_sync_runtimes: StateSyncRuntimes,
-    _telemetry_runtime: Runtime,
+    _telemetry_runtime: Option<Runtime>,
 }
 
 pub fn start(config: &NodeConfig, log_file: Option<PathBuf>) {
@@ -122,6 +114,8 @@ pub fn start(config: &NodeConfig, log_file: Option<PathBuf>) {
         std::thread::park();
     }
 }
+
+const EPOCH_LENGTH_SECS: u64 = 60;
 
 pub fn load_test_environment<R>(
     config_path: Option<PathBuf>,
@@ -167,19 +161,23 @@ pub fn load_test_environment<R>(
             .parse()
             .unwrap();
         if lazy {
-            template.consensus.mempool_poll_count = u64::MAX;
+            template.consensus.quorum_store_poll_count = u64::MAX;
         }
+        let now_secs = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let builder = aptos_genesis::builder::Builder::new(&config_path, genesis_modules)
+            .unwrap()
+            .with_allow_new_validators(true)
+            .with_epoch_duration_secs(EPOCH_LENGTH_SECS)
+            .with_template(template)
+            .with_randomize_first_validator_ports(random_ports)
+            .with_initial_lockup_timestamp(now_secs + EPOCH_LENGTH_SECS);
 
-        let builder = aptos_genesis_tool::validator_builder::ValidatorBuilder::new(
-            &config_path,
-            genesis_modules,
-        )
-        .template(template)
-        .randomize_first_validator_ports(random_ports);
+        let (root_key, _genesis, genesis_waypoint, validators) = builder.build(rng).unwrap();
 
-        let (root_keys, _genesis, genesis_waypoint, validators) = builder.build(rng).unwrap();
-
-        let serialized_keys = bcs::to_bytes(&root_keys.root_key).unwrap();
+        let serialized_keys = bcs::to_bytes(&root_key).unwrap();
         let mut key_file = std::fs::File::create(&aptos_root_key_path).unwrap();
         key_file.write_all(&serialized_keys).unwrap();
 
@@ -219,12 +217,9 @@ pub fn load_test_environment<R>(
 
 // Fetch chain ID from on-chain resource
 fn fetch_chain_id(db: &DbReaderWriter) -> ChainId {
-    let synced_version = (&*db.reader)
-        .fetch_synced_version()
-        .expect("[aptos-node] failed fetching synced version.");
     let db_state_view = db
         .reader
-        .state_view_at_version(Some(synced_version))
+        .latest_state_checkpoint_view()
         .expect("[aptos-node] failed to create db state view");
     db_state_view
         .as_account_with_state_view(&aptos_root_address())
@@ -273,6 +268,7 @@ fn create_state_sync_runtimes<M: MempoolNotificationSender + 'static>(
     let (aptos_data_client, aptos_data_client_runtime) = setup_aptos_data_client(
         node_config.state_sync.storage_service,
         node_config.state_sync.aptos_data_client,
+        node_config.base.clone(),
         storage_service_client_network_handles,
         peer_metadata_storage,
     );
@@ -335,6 +331,7 @@ fn setup_data_streaming_service(
 fn setup_aptos_data_client(
     storage_service_config: StorageServiceConfig,
     aptos_data_client_config: AptosDataClientConfig,
+    base_config: BaseConfig,
     network_handles: HashMap<NetworkId, storage_service_client::StorageServiceNetworkSender>,
     peer_metadata_storage: Arc<PeerMetadataStorage>,
 ) -> (AptosNetDataClient, Runtime) {
@@ -354,6 +351,7 @@ fn setup_aptos_data_client(
     // Create the data client and spawn the data poller
     let (aptos_data_client, data_summary_poller) = AptosNetDataClient::new(
         aptos_data_client_config,
+        base_config,
         storage_service_config,
         TimeService::real(),
         network_client,
@@ -392,47 +390,7 @@ fn setup_state_sync_storage_service(
     storage_service_runtime
 }
 
-async fn periodic_telemetry_dump(node_config: NodeConfig, db: DbReaderWriter) {
-    use futures::stream::StreamExt;
-    let mut dump_interval = IntervalStream::new(tokio::time::interval(
-        std::time::Duration::from_secs(NODE_PUSH_TIME_SECS),
-    ))
-    .fuse();
-
-    info!("periodic_telemetry_dump task started");
-
-    loop {
-        futures::select! {
-            _ = dump_interval.select_next_some() => {
-
-                // Build the params from internal prometheus metrics
-                let mut metrics_params: HashMap<String, String> = HashMap::new();
-
-                let met = get_public_json_metrics();
-                for (k, v) in &met {
-                    metrics_params.insert(k.to_string(), v.to_string());
-                }
-
-                // get some data we do not currently have metrics for
-                let chain_id = fetch_chain_id(&db).id(); // get the chain_id as its u8 id for consistency of schema
-                let peer_id = match node_config.peer_id() {
-                    Some(p) => p.to_string(),
-                    None => String::new()
-                };
-                let synced_version = (&*db.reader).fetch_synced_version().unwrap_or(0);
-
-                metrics_params.insert(SYNCED_VERSION_METRIC.to_string(), synced_version.to_string());
-                metrics_params.insert(CHAIN_ID_METRIC.to_string(), chain_id.to_string());
-                metrics_params.insert(PEER_ID_METRIC.to_string(), peer_id.to_string());
-                send_env_data(APTOS_NODE_PUSH_METRICS.to_string(), peer_id.to_string(), metrics_params).await;
-            }
-        }
-    }
-}
-
 async fn periodic_state_dump(node_config: NodeConfig, db: DbReaderWriter) {
-    use futures::stream::StreamExt;
-
     let args: Vec<String> = ::std::env::args().collect();
 
     // Once an hour
@@ -479,12 +437,7 @@ pub fn setup_environment(node_config: &NodeConfig, logger: Option<Arc<Logger>>) 
 
     let metrics_port = node_config.debug_interface.metrics_server_port;
     let metric_host = node_config.debug_interface.address.clone();
-    thread::spawn(move || metric_server::start_server(metric_host, metrics_port, false));
-    let public_metrics_port = node_config.debug_interface.public_metrics_server_port;
-    let public_metric_host = node_config.debug_interface.address.clone();
-    thread::spawn(move || {
-        metric_server::start_server(public_metric_host, public_metrics_port, true)
-    });
+    thread::spawn(move || metric_server::start_server(metric_host, metrics_port));
 
     let mut instant = Instant::now();
     let (aptos_db, db_rw) = DbReaderWriter::wrap(
@@ -496,7 +449,6 @@ pub fn setup_environment(node_config: &NodeConfig, logger: Option<Arc<Logger>>) 
         )
         .expect("DB should open."),
     );
-    let _simple_storage_service = start_storage_service_with_db(node_config, Arc::clone(&aptos_db));
     let backup_service = start_backup_service(
         node_config.storage.backup_service_address,
         Arc::clone(&aptos_db),
@@ -569,9 +521,14 @@ pub fn setup_environment(node_config: &NodeConfig, logger: Option<Arc<Logger>>) 
     let peer_metadata_storage = PeerMetadataStorage::new(&network_ids);
     for network_config in network_configs.into_iter() {
         debug!("Creating runtime for {}", network_config.network_id);
-        let runtime = Builder::new_multi_thread()
+        let mut runtime_builder = Builder::new_multi_thread();
+        runtime_builder
             .thread_name(format!("network-{}", network_config.network_id))
-            .enable_all()
+            .enable_all();
+        if let Some(runtime_threads) = network_config.runtime_threads {
+            runtime_builder.worker_threads(runtime_threads);
+        }
+        let runtime = runtime_builder
             .build()
             .expect("Failed to start runtime. Won't be able to start networking.");
 
@@ -667,7 +624,8 @@ pub fn setup_environment(node_config: &NodeConfig, logger: Option<Arc<Logger>>) 
     let api_runtime = bootstrap_api(node_config, chain_id, aptos_db, mp_client_sender).unwrap();
 
     let mut consensus_runtime = None;
-    let (consensus_to_mempool_sender, consensus_requests) = channel(INTRA_NODE_CHANNEL_BUFFER_SIZE);
+    let (consensus_to_mempool_sender, consensus_to_mempool_receiver) =
+        channel(INTRA_NODE_CHANNEL_BUFFER_SIZE);
 
     instant = Instant::now();
     let mempool = aptos_mempool::bootstrap(
@@ -675,12 +633,22 @@ pub fn setup_environment(node_config: &NodeConfig, logger: Option<Arc<Logger>>) 
         Arc::clone(&db_rw.reader),
         mempool_network_handles,
         mp_client_events,
-        consensus_requests,
+        consensus_to_mempool_receiver,
         mempool_listener,
         mempool_reconfig_subscription,
         peer_metadata_storage.clone(),
     );
     debug!("Mempool started in {} ms", instant.elapsed().as_millis());
+
+    assert!(
+        !node_config.consensus.use_quorum_store,
+        "QuorumStore is not yet implemented"
+    );
+    assert_ne!(
+        node_config.consensus.use_quorum_store,
+        node_config.mempool.shared_mempool_validator_broadcast,
+        "Shared mempool validator broadcast must be turned off when QuorumStore is on, and vice versa"
+    );
 
     // StateSync should be instantiated and started before Consensus to avoid a cyclic dependency:
     // network provider -> consensus -> state synchronizer -> network provider.  This has resulted
@@ -714,17 +682,13 @@ pub fn setup_environment(node_config: &NodeConfig, logger: Option<Arc<Logger>>) 
     debug_if
         .runtime()
         .handle()
-        .spawn(periodic_state_dump(node_config.to_owned(), db_rw.clone()));
+        .spawn(periodic_state_dump(node_config.to_owned(), db_rw));
 
-    let telemery_runtime = Builder::new_multi_thread()
-        .thread_name("aptos-telemetry")
-        .enable_all()
-        .build()
-        .expect("Failed to create aptos telemetry runtime!");
-
-    telemery_runtime
-        .handle()
-        .spawn(periodic_telemetry_dump(node_config.to_owned(), db_rw));
+    // Create the telemetry service
+    let telemetry_runtime = aptos_telemetry::service::start_telemetry_service(
+        node_config.clone(),
+        chain_id.to_string(),
+    );
 
     AptosHandle {
         _api: api_runtime,
@@ -734,6 +698,6 @@ pub fn setup_environment(node_config: &NodeConfig, logger: Option<Arc<Logger>>) 
         _mempool: mempool,
         _network_runtimes: network_runtimes,
         _state_sync_runtimes: state_sync_runtimes,
-        _telemetry_runtime: telemery_runtime,
+        _telemetry_runtime: telemetry_runtime,
     }
 }

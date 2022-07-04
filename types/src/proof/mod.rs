@@ -30,8 +30,7 @@ use std::marker::PhantomData;
 
 pub use self::definition::{
     AccumulatorConsistencyProof, AccumulatorExtensionProof, AccumulatorProof,
-    AccumulatorRangeProof, EventAccumulatorProof, EventProof, SparseMerkleProof,
-    SparseMerkleRangeProof, StateStoreValueProof, TransactionAccumulatorProof,
+    AccumulatorRangeProof, SparseMerkleProof, SparseMerkleRangeProof, TransactionAccumulatorProof,
     TransactionAccumulatorRangeProof, TransactionAccumulatorSummary, TransactionInfoListWithProof,
     TransactionInfoWithProof,
 };

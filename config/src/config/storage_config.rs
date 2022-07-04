@@ -9,7 +9,7 @@ use std::{
 };
 
 /// Port selected RocksDB options for tuning underlying rocksdb instance of AptosDB.
-/// see https://github.com/facebook/rocksdb/blob/master/include/rocksdb/options.h
+/// see <https://github.com/facebook/rocksdb/blob/master/include/rocksdb/options.h>
 /// for detailed explanations.
 #[derive(Copy, Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(default, deny_unknown_fields)]
@@ -99,7 +99,7 @@ impl Default for StorageConfig {
             storage_pruner_config: StoragePrunerConfig {
                 state_store_prune_window: Some(1_000_000),
                 ledger_prune_window: Some(10_000_000),
-                pruning_batch_size: 10_000,
+                pruning_batch_size: 500,
             },
             data_dir: PathBuf::from("/opt/aptos/data"),
             // Default read/write/connection timeout, in milliseconds

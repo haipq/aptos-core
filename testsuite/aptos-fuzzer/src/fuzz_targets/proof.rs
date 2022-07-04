@@ -7,8 +7,8 @@ use aptos_proptest_helpers::ValueGenerator;
 use aptos_types::{
     ledger_info::LedgerInfo,
     proof::{
-        EventProof, SparseMerkleProof, StateStoreValueProof, TestAccumulatorProof,
-        TestAccumulatorRangeProof, TransactionInfoListWithProof, TransactionInfoWithProof,
+        SparseMerkleProof, TestAccumulatorProof, TestAccumulatorRangeProof,
+        TransactionInfoListWithProof, TransactionInfoWithProof,
     },
     state_store::state_value::StateValue,
     transaction::Version,
@@ -53,7 +53,7 @@ pub struct SparseMerkleProofFuzzer;
 
 #[derive(Debug, Arbitrary)]
 struct SparseMerkleProofFuzzerInput {
-    proof: SparseMerkleProof<StateValue>,
+    proof: SparseMerkleProof,
     expected_root_hash: HashValue,
     element_key: HashValue,
     element_blob: Option<StateValue>,
@@ -136,70 +136,6 @@ impl FuzzTargetImpl for TransactionInfoWithProofFuzzer {
         let _res = input
             .proof
             .verify(&input.ledger_info, input.transaction_version);
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct AccountStateProofFuzzer;
-
-#[derive(Debug, Arbitrary)]
-struct AccountStateProofFuzzerInput {
-    proof: StateStoreValueProof,
-    ledger_info: LedgerInfo,
-    state_version: Version,
-    state_key_hash: HashValue,
-    state_value: Option<StateValue>,
-}
-
-impl FuzzTargetImpl for AccountStateProofFuzzer {
-    fn description(&self) -> &'static str {
-        "Proof: AccountStateProof"
-    }
-
-    fn generate(&self, _idx: usize, _gen: &mut ValueGenerator) -> Option<Vec<u8>> {
-        Some(corpus_from_strategy(any::<AccountStateProofFuzzerInput>()))
-    }
-
-    fn fuzz(&self, data: &[u8]) {
-        let input = fuzz_data_to_value(data, any::<AccountStateProofFuzzerInput>());
-        let _res = input.proof.verify(
-            &input.ledger_info,
-            input.state_version,
-            input.state_key_hash,
-            input.state_value.as_ref(),
-        );
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct EventProofFuzzer;
-
-#[derive(Debug, Arbitrary)]
-struct EventProofFuzzerInput {
-    proof: EventProof,
-    ledger_info: LedgerInfo,
-    event_hash: HashValue,
-    transaction_version: Version,
-    event_version_within_transaction: Version,
-}
-
-impl FuzzTargetImpl for EventProofFuzzer {
-    fn description(&self) -> &'static str {
-        "Proof: EventProof"
-    }
-
-    fn generate(&self, _idx: usize, _gen: &mut ValueGenerator) -> Option<Vec<u8>> {
-        Some(corpus_from_strategy(any::<EventProofFuzzerInput>()))
-    }
-
-    fn fuzz(&self, data: &[u8]) {
-        let input = fuzz_data_to_value(data, any::<EventProofFuzzerInput>());
-        let _res = input.proof.verify(
-            &input.ledger_info,
-            input.event_hash,
-            input.transaction_version,
-            input.event_version_within_transaction,
-        );
     }
 }
 

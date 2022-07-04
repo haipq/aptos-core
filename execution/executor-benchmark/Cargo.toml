@@ -13,8 +13,10 @@ edition = "2018"
 chrono = "0.4.19"
 criterion = "0.3.5"
 indicatif = "0.15.0"
+itertools = "0.10.3"
 jemallocator = { version = "0.3.2", features = ["profiling", "unprefixed_malloc_on_supported_platforms"] }
-rand = "0.8.3"
+num_cpus = "1.13.1"
+rand = "0.7.3"
 rayon = "1.5.2"
 serde = "1.0.137"
 structopt = "0.3.21"
@@ -22,7 +24,7 @@ toml = "0.5.9"
 
 aptos-config = { path = "../../config" }
 aptos-crypto = { path = "../../crates/aptos-crypto" }
-aptos-genesis-tool = { path = "../../config/management/genesis", features = ["testing"] }
+aptos-genesis = { path = "../../crates/aptos-genesis", features = ["testing"] }
 aptos-infallible = { path = "../../crates/aptos-infallible" }
 aptos-jellyfish-merkle = { path = "../../storage/jellyfish-merkle" }
 aptos-logger = { path = "../../crates/aptos-logger" }
@@ -37,7 +39,7 @@ aptosdb = { path = "../../storage/aptosdb" }
 executor = { path = "../executor" }
 executor-types = { path = "../executor-types" }
 schemadb = { path = "../../storage/schemadb" }
-storage-client = { path = "../../storage/storage-client" }
+scratchpad = { path = "../../storage/scratchpad" }
 storage-interface = { path = "../../storage/storage-interface" }
 
 [dev-dependencies]

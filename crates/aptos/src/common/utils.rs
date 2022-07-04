@@ -5,27 +5,22 @@ use crate::{
     common::types::{CliError, CliTypedResult, PromptOptions},
     CliResult,
 };
-use aptos_crypto::{ed25519::Ed25519PrivateKey, PrivateKey};
-use aptos_rest_client::{Client, Transaction};
-use aptos_sdk::{transaction_builder::TransactionFactory, types::LocalAccount};
-use aptos_telemetry::constants::APTOS_CLI_PUSH_METRICS;
-use aptos_types::{
-    chain_id::ChainId,
-    transaction::{authenticator::AuthenticationKey, TransactionPayload},
-};
+use aptos_rest_client::Client;
+use aptos_types::chain_id::ChainId;
 use itertools::Itertools;
 use move_deps::move_core_types::account_address::AccountAddress;
 use reqwest::Url;
 use serde::Serialize;
 use shadow_rs::shadow;
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::BTreeMap,
     env,
-    fs::File,
+    fs::OpenOptions,
     io::Write,
+    os::unix::fs::OpenOptionsExt,
     path::{Path, PathBuf},
     str::FromStr,
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 shadow!(build);
@@ -67,18 +62,13 @@ pub async fn to_common_result<T: Serialize>(
 ) -> CliResult {
     let latency = start_time.elapsed();
     let is_err = result.is_err();
-    let error = if let Err(ref e) = result {
-        e.to_str()
+    let error = if let Err(ref error) = result {
+        Some(error.to_string())
     } else {
-        "None"
+        None
     };
-    let metrics = collect_metrics(command, !is_err, latency, error);
-    aptos_telemetry::send_env_data(
-        APTOS_CLI_PUSH_METRICS.to_string(),
-        uuid::Uuid::new_v4().to_string(),
-        metrics,
-    )
-    .await;
+    aptos_telemetry::cli_metrics::send_cli_telemetry_event(command.into(), latency, !is_err, error)
+        .await;
     let result: ResultWrapper<T> = result.into();
     let string = serde_json::to_string_pretty(&result).unwrap();
     if is_err {
@@ -86,54 +76,6 @@ pub async fn to_common_result<T: Serialize>(
     } else {
         Ok(string)
     }
-}
-
-/// Collect build and command metrics for better debugging of CLI
-fn collect_metrics(
-    command: &str,
-    successful: bool,
-    latency: Duration,
-    error: &str,
-) -> HashMap<String, String> {
-    let mut metrics = HashMap::new();
-    metrics.insert("Latency".to_string(), latency.as_millis().to_string());
-    metrics.insert("Command".to_string(), command.to_string());
-    metrics.insert("Successful".to_string(), successful.to_string());
-    metrics.insert("Error".to_string(), error.to_string());
-    metrics.insert("Version".to_string(), build::VERSION.to_string());
-    metrics.insert("PkgVersion".to_string(), build::PKG_VERSION.to_string());
-    metrics.insert(
-        "ClapVersion".to_string(),
-        build::CLAP_LONG_VERSION.to_string(),
-    );
-    metrics.insert("Commit".to_string(), build::COMMIT_HASH.to_string());
-    metrics.insert("Branch".to_string(), build::BRANCH.to_string());
-    metrics.insert("Tag".to_string(), build::TAG.to_string());
-    metrics.insert("BUILD_OS".to_string(), build::BUILD_OS.to_string());
-    metrics.insert(
-        "BUILD_TARGET_OS".to_string(),
-        build::BUILD_TARGET.to_string(),
-    );
-    metrics.insert(
-        "BUILD_TARGET_ARCH".to_string(),
-        build::BUILD_TARGET_ARCH.to_string(),
-    );
-    metrics.insert(
-        "BUILD_RUST_CHANNEL".to_string(),
-        build::BUILD_RUST_CHANNEL.to_string(),
-    );
-    metrics.insert("BUILD_TIME".to_string(), build::BUILD_TIME.to_string());
-    metrics.insert("RUST_VERSION".to_string(), build::RUST_VERSION.to_string());
-    metrics.insert(
-        "RUST_TOOLCHAIN".to_string(),
-        build::RUST_CHANNEL.to_string(),
-    );
-    metrics.insert(
-        "CARGO_VERSION".to_string(),
-        build::CARGO_VERSION.to_string(),
-    );
-
-    metrics
 }
 
 /// A result wrapper for displaying either a correct execution result or an error.
@@ -195,7 +137,30 @@ pub fn read_from_file(path: &Path) -> CliTypedResult<Vec<u8>> {
 
 /// Write a `&[u8]` to a file
 pub fn write_to_file(path: &Path, name: &str, bytes: &[u8]) -> CliTypedResult<()> {
-    let mut file = File::create(path).map_err(|e| CliError::IO(name.to_string(), e))?;
+    write_to_file_with_opts(path, name, bytes, &mut OpenOptions::new())
+}
+
+/// Write a User only read / write file
+pub fn write_to_user_only_file(path: &Path, name: &str, bytes: &[u8]) -> CliTypedResult<()> {
+    let mut opts = OpenOptions::new();
+    #[cfg(unix)]
+    opts.mode(0o600);
+    write_to_file_with_opts(path, name, bytes, &mut opts)
+}
+
+/// Write a `&[u8]` to a file with the given options
+pub fn write_to_file_with_opts(
+    path: &Path,
+    name: &str,
+    bytes: &[u8],
+    opts: &mut OpenOptions,
+) -> CliTypedResult<()> {
+    let mut file = opts
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(path)
+        .map_err(|e| CliError::IO(name.to_string(), e))?;
     file.write_all(bytes)
         .map_err(|e| CliError::IO(name.to_string(), e))
 }
@@ -228,6 +193,15 @@ pub async fn get_sequence_number(
     Ok(account.sequence_number)
 }
 
+/// Retrieves the chain id from the rest client
+pub async fn chain_id(rest_client: &Client) -> CliTypedResult<ChainId> {
+    let state = rest_client
+        .get_ledger_information()
+        .await
+        .map_err(|err| CliError::ApiError(err.to_string()))?
+        .into_inner();
+    Ok(ChainId::new(state.chain_id))
+}
 /// Error message for parsing a map
 const PARSE_MAP_SYNTAX_MSG: &str = "Invalid syntax for map. Example: Name=Value,Name2=Value";
 
@@ -262,38 +236,6 @@ where
     Ok(map)
 }
 
-/// Submits a [`TransactionPayload`] as signed by the `sender_key`
-pub async fn submit_transaction(
-    url: Url,
-    chain_id: ChainId,
-    sender_key: Ed25519PrivateKey,
-    payload: TransactionPayload,
-    max_gas: u64,
-) -> CliTypedResult<Transaction> {
-    let client = Client::new(url);
-
-    // Get sender address
-    let sender_address = AuthenticationKey::ed25519(&sender_key.public_key()).derived_address();
-    let sender_address = AccountAddress::new(*sender_address);
-
-    // Get sequence number for account
-    let sequence_number = get_sequence_number(&client, sender_address).await?;
-
-    // Sign and submit transaction
-    let transaction_factory = TransactionFactory::new(chain_id)
-        .with_gas_unit_price(1)
-        .with_max_gas_amount(max_gas);
-    let sender_account = &mut LocalAccount::new(sender_address, sender_key, sequence_number);
-    let transaction =
-        sender_account.sign_with_transaction_builder(transaction_factory.payload(payload));
-    let response = client
-        .submit_and_wait(&transaction)
-        .await
-        .map_err(|err| CliError::ApiError(err.to_string()))?;
-
-    Ok(response.into_inner())
-}
-
 pub fn current_dir() -> PathBuf {
     env::current_dir().unwrap()
 }
@@ -306,4 +248,28 @@ pub fn read_line(input_name: &'static str) -> CliTypedResult<String> {
         .map_err(|err| CliError::IO(input_name.to_string(), err))?;
 
     Ok(input_buf)
+}
+
+/// Fund account (and possibly create it) from a faucet
+pub async fn fund_account(
+    faucet_url: Url,
+    num_coins: u64,
+    address: AccountAddress,
+) -> CliTypedResult<()> {
+    let response = reqwest::Client::new()
+        .post(format!(
+            "{}mint?amount={}&auth_key={}",
+            faucet_url, num_coins, address
+        ))
+        .send()
+        .await
+        .map_err(|err| CliError::ApiError(err.to_string()))?;
+    if response.status() == 200 {
+        Ok(())
+    } else {
+        Err(CliError::ApiError(format!(
+            "Faucet issue: {}",
+            response.status()
+        )))
+    }
 }

@@ -2,31 +2,34 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    commit_notifier::QuorumStoreCommitNotifier,
     counters,
     epoch_manager::EpochManager,
     network::NetworkTask,
     network_interface::{ConsensusNetworkEvents, ConsensusNetworkSender},
     network_tests::{NetworkPlayground, TwinId},
-    test_utils::{MockStateComputer, MockStorage, MockTransactionManager},
+    test_utils::{MockStateComputer, MockStorage},
     util::time_service::ClockTimeService,
 };
 use aptos_config::{
-    config::{
-        ConsensusProposerType::{self, RoundProposer},
-        NodeConfig, WaypointConfig,
-    },
+    config::{NodeConfig, WaypointConfig},
     generator::{self, ValidatorSwarm},
     network_id::NetworkId,
 };
 use aptos_mempool::mocks::MockSharedMempool;
 use aptos_types::{
     ledger_info::LedgerInfoWithSignatures,
-    on_chain_config::{OnChainConfig, OnChainConfigPayload, ValidatorSet},
+    on_chain_config::{
+        ConsensusConfigV1, OnChainConfig, OnChainConfigPayload, OnChainConsensusConfig,
+        ProposerElectionType::{self, RoundProposer},
+        ValidatorSet,
+    },
+    transaction::SignedTransaction,
     validator_info::ValidatorInfo,
     waypoint::Waypoint,
 };
 use channel::{self, aptos_channel, message_queues::QueueStyle};
-use consensus_types::common::{Author, Payload, Round};
+use consensus_types::common::{Author, Round};
 use event_notifications::{ReconfigNotification, ReconfigNotificationListener};
 use futures::channel::mpsc;
 use network::{
@@ -48,7 +51,7 @@ pub struct SMRNode {
     pub commit_cb_receiver: mpsc::UnboundedReceiver<LedgerInfoWithSignatures>,
     _runtime: Runtime,
     _shared_mempool: MockSharedMempool,
-    _state_sync: mpsc::UnboundedReceiver<Payload>,
+    _state_sync: mpsc::UnboundedReceiver<Vec<SignedTransaction>>,
 }
 
 fn author_from_config(config: &NodeConfig) -> Author {
@@ -59,6 +62,7 @@ impl SMRNode {
     fn start(
         playground: &mut NetworkPlayground,
         config: NodeConfig,
+        consensus_config: OnChainConsensusConfig,
         storage: Arc<MockStorage>,
         twin_id: TwinId,
     ) -> Self {
@@ -79,25 +83,29 @@ impl SMRNode {
         let (state_sync_client, state_sync) = mpsc::unbounded();
         let (commit_cb_sender, commit_cb_receiver) = mpsc::unbounded::<LedgerInfoWithSignatures>();
         let shared_mempool = MockSharedMempool::new();
-        let consensus_to_mempool_sender = shared_mempool.consensus_sender.clone();
+        let (quorum_store_to_mempool_sender, _) = mpsc::channel(1_024);
         let state_computer = Arc::new(MockStateComputer::new(
             state_sync_client,
             commit_cb_sender,
             Arc::clone(&storage),
         ));
-        let txn_manager = Arc::new(MockTransactionManager::new(Some(
-            consensus_to_mempool_sender,
-        )));
         let (reconfig_sender, reconfig_events) = aptos_channel::new(QueueStyle::LIFO, 1, None);
         let reconfig_listener = ReconfigNotificationListener {
             notification_receiver: reconfig_events,
         };
+        let commit_notifier = Arc::new(QuorumStoreCommitNotifier::new(1_000));
         let mut configs = HashMap::new();
         configs.insert(
             ValidatorSet::CONFIG_ID,
             bcs::to_bytes(storage.get_validator_set()).unwrap(),
         );
+        configs.insert(
+            OnChainConsensusConfig::CONFIG_ID,
+            // Requires double serialization, check deserialize_into_config for more details
+            bcs::to_bytes(&bcs::to_bytes(&consensus_config).unwrap()).unwrap(),
+        );
         let payload = OnChainConfigPayload::new(1, Arc::new(configs));
+
         reconfig_sender
             .push(
                 (),
@@ -130,10 +138,11 @@ impl SMRNode {
             self_sender,
             network_sender,
             timeout_sender,
-            txn_manager,
+            quorum_store_to_mempool_sender,
             state_computer,
             storage.clone(),
             reconfig_listener,
+            commit_notifier,
         );
         let (network_task, network_receiver) = NetworkTask::new(network_events, self_receiver);
 
@@ -154,7 +163,7 @@ impl SMRNode {
         num_nodes: usize,
         num_twins: usize,
         playground: &mut NetworkPlayground,
-        proposer_type: ConsensusProposerType,
+        proposer_type: ProposerElectionType,
         round_proposers_idx: Option<HashMap<Round, usize>>,
     ) -> Vec<Self> {
         assert!(num_nodes >= num_twins);
@@ -225,7 +234,6 @@ impl SMRNode {
                 .unwrap()
                 .waypoint = Some(waypoint);
             config.base.waypoint = WaypointConfig::FromConfig(waypoint);
-            config.consensus.proposer_type = proposer_type.clone();
             config.consensus.safety_rules.verify_vote_proposal_signature = false;
             // Disable timeout in twins test to avoid flakiness
             config.consensus.round_initial_timeout_ms = 2_000_000;
@@ -234,7 +242,18 @@ impl SMRNode {
 
             let twin_id = TwinId { id: smr_id, author };
 
-            smr_nodes.push(Self::start(playground, config, storage, twin_id));
+            let consensus_config = OnChainConsensusConfig::V1(ConsensusConfigV1 {
+                proposer_election_type: proposer_type.clone(),
+                ..ConsensusConfigV1::default()
+            });
+
+            smr_nodes.push(Self::start(
+                playground,
+                config,
+                consensus_config,
+                storage,
+                twin_id,
+            ));
         }
         smr_nodes
     }

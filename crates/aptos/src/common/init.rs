@@ -1,16 +1,13 @@
 // Copyright (c) Aptos
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    account::create::CreateAccount,
-    common::{
-        types::{
-            account_address_from_public_key, CliCommand, CliConfig, CliError, CliTypedResult,
-            EncodingOptions, PrivateKeyInputOptions, ProfileConfig, ProfileOptions, PromptOptions,
-        },
-        utils::{prompt_yes_with_override, read_line},
+use crate::common::{
+    types::{
+        account_address_from_public_key, CliCommand, CliConfig, CliError, CliTypedResult,
+        EncodingOptions, PrivateKeyInputOptions, ProfileConfig, ProfileOptions, PromptOptions,
+        RngArgs,
     },
-    op::key::GenerateKey,
+    utils::{fund_account, prompt_yes_with_override, read_line},
 };
 use aptos_crypto::{ed25519::Ed25519PrivateKey, PrivateKey, ValidCryptoMaterialStringExt};
 use async_trait::async_trait;
@@ -33,14 +30,19 @@ pub struct InitTool {
     /// URL for the Faucet endpoint
     #[clap(long)]
     pub faucet_url: Option<Url>,
+    /// Whether to skip the faucet for a non-faucet endpoint
+    #[clap(long)]
+    pub skip_faucet: bool,
     #[clap(flatten)]
-    private_key_options: PrivateKeyInputOptions,
+    pub rng_args: RngArgs,
     #[clap(flatten)]
-    profile_options: ProfileOptions,
+    pub(crate) private_key_options: PrivateKeyInputOptions,
     #[clap(flatten)]
-    prompt_options: PromptOptions,
+    pub(crate) profile_options: ProfileOptions,
     #[clap(flatten)]
-    encoding_options: EncodingOptions,
+    pub(crate) prompt_options: PromptOptions,
+    #[clap(flatten)]
+    pub(crate) encoding_options: EncodingOptions,
 }
 
 #[async_trait]
@@ -95,12 +97,15 @@ impl CliCommand<()> for InitTool {
         profile_config.rest_url = Some(rest_url.to_string());
 
         // Faucet Endpoint
-        let faucet_url = if let Some(faucet_url) = self.faucet_url {
+        let faucet_url = if self.skip_faucet {
+            eprintln!("Not configuring a faucet because --skip-faucet was provided");
+            None
+        } else if let Some(faucet_url) = self.faucet_url {
             eprintln!("Using command line argument for faucet URL {}", faucet_url);
-            faucet_url
+            Some(faucet_url)
         } else {
             eprintln!(
-                "Enter your faucet endpoint [Current: {} | No input: {}]",
+                "Enter your faucet endpoint [Current: {} | No input: {} | 'skip' to not use a faucet]",
                 profile_config
                     .faucet_url
                     .unwrap_or_else(|| "None".to_string()),
@@ -110,15 +115,21 @@ impl CliCommand<()> for InitTool {
             let input = input.trim();
             if input.is_empty() {
                 eprintln!("No faucet url given, using {}...", DEFAULT_FAUCET_URL);
-                reqwest::Url::parse(DEFAULT_FAUCET_URL).map_err(|err| {
+                Some(reqwest::Url::parse(DEFAULT_FAUCET_URL).map_err(|err| {
                     CliError::UnexpectedError(format!("Failed to parse default faucet URL {}", err))
-                })?
+                })?)
+            } else if input.to_lowercase() == "skip" {
+                eprintln!("Skipping faucet");
+                None
             } else {
-                reqwest::Url::parse(input)
-                    .map_err(|err| CliError::UnableToParse("Faucet Endpoint", err.to_string()))?
+                Some(
+                    reqwest::Url::parse(input).map_err(|err| {
+                        CliError::UnableToParse("Faucet Endpoint", err.to_string())
+                    })?,
+                )
             }
         };
-        profile_config.faucet_url = Some(faucet_url.to_string());
+        profile_config.faucet_url = faucet_url.clone().map(|inner| inner.to_string());
 
         // Private key
         let private_key = if let Some(private_key) = self
@@ -137,7 +148,9 @@ impl CliCommand<()> for InitTool {
                     private_key
                 } else {
                     eprintln!("No key given, generating key...");
-                    GenerateKey::generate_ed25519_in_memory()
+                    self.rng_args
+                        .key_generator()?
+                        .generate_ed25519_private_key()
                 }
             } else {
                 Ed25519PrivateKey::from_encoded_string(input)
@@ -150,15 +163,16 @@ impl CliCommand<()> for InitTool {
         profile_config.public_key = Some(public_key);
         profile_config.account = Some(address);
 
-        // Create account if it doesn't exist
+        // Create account if it doesn't exist (and there's a faucet)
         let client = aptos_rest_client::Client::new(rest_url);
-        if client.get_account(address).await.is_err() {
-            eprintln!(
-                "Account {} doesn't exist, creating it and funding it with {} coins",
-                address, NUM_DEFAULT_COINS
-            );
-            CreateAccount::create_account_with_faucet(faucet_url, NUM_DEFAULT_COINS, address)
-                .await?;
+        if let Some(faucet_url) = faucet_url {
+            if client.get_account(address).await.is_err() {
+                eprintln!(
+                    "Account {} doesn't exist, creating it and funding it with {} coins",
+                    address, NUM_DEFAULT_COINS
+                );
+                fund_account(faucet_url, NUM_DEFAULT_COINS, address).await?;
+            }
         }
 
         // Ensure the loaded config has profiles setup for a possible empty file

@@ -7,7 +7,7 @@ use aptos_logger::Level;
 use aptos_types::{ledger_info::LedgerInfo, validator_signer::ValidatorSigner};
 use consensus_types::{
     block::{block_test_utils::certificate_for_genesis, Block},
-    common::Round,
+    common::{Author, Round},
     executed_block::ExecutedBlock,
     quorum_cert::QuorumCert,
     sync_info::SyncInfo,
@@ -15,19 +15,19 @@ use consensus_types::{
 use std::{future::Future, sync::Arc, time::Duration};
 use tokio::{runtime, time::timeout};
 
+#[cfg(any(test, feature = "fuzzing"))]
+mod mock_payload_manager;
 mod mock_state_computer;
 mod mock_storage;
-#[cfg(any(test, feature = "fuzzing"))]
-mod mock_txn_manager;
 
 use crate::util::mock_time_service::SimulatedTimeService;
 use aptos_types::block_info::BlockInfo;
 use consensus_types::{block::block_test_utils::gen_test_certificate, common::Payload};
+pub use mock_payload_manager::MockPayloadManager;
 pub use mock_state_computer::{
     EmptyStateComputer, MockStateComputer, RandomComputeResultStateComputer,
 };
 pub use mock_storage::{EmptyStorage, MockSharedStorage, MockStorage};
-pub use mock_txn_manager::MockTransactionManager;
 
 pub const TEST_TIMEOUT: Duration = Duration::from_secs(60);
 
@@ -135,6 +135,7 @@ impl TreeInserter {
                 parent_qc,
                 parent.timestamp_usecs() + 1,
                 round,
+                Payload::new_empty(),
                 vec![],
             ))
             .await
@@ -166,8 +167,16 @@ impl TreeInserter {
         timestamp_usecs: u64,
         round: Round,
         payload: Payload,
+        failed_authors: Vec<(Round, Author)>,
     ) -> Block {
-        Block::new_proposal(payload, round, timestamp_usecs, parent_qc, &self.signer)
+        Block::new_proposal(
+            payload,
+            round,
+            timestamp_usecs,
+            parent_qc,
+            &self.signer,
+            failed_authors,
+        )
     }
 }
 
@@ -176,12 +185,7 @@ pub fn placeholder_ledger_info() -> LedgerInfo {
 }
 
 pub fn placeholder_sync_info() -> SyncInfo {
-    SyncInfo::new(
-        certificate_for_genesis(),
-        certificate_for_genesis(),
-        None,
-        None,
-    )
+    SyncInfo::new(certificate_for_genesis(), certificate_for_genesis(), None)
 }
 
 fn nocapture() -> bool {

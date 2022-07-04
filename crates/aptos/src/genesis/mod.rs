@@ -1,34 +1,30 @@
 // Copyright (c) Aptos
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod config;
 pub mod git;
 pub mod keys;
+#[cfg(test)]
+mod tests;
 
 use crate::{
     common::{
         types::{CliError, CliTypedResult, PromptOptions},
         utils::{check_if_file_exists, write_to_file},
     },
-    genesis::{
-        config::{Layout, ValidatorConfiguration},
-        git::{GitOptions, LAYOUT_NAME},
-    },
+    genesis::git::{Client, GitOptions, LAYOUT_NAME},
     CliCommand, CliResult,
 };
-use aptos_config::config::{RocksdbConfig, NO_OP_STORAGE_PRUNER_CONFIG};
-use aptos_crypto::ed25519::Ed25519PublicKey;
-use aptos_temppath::TempPath;
-use aptos_types::{chain_id::ChainId, transaction::Transaction};
-use aptos_vm::AptosVM;
-use aptosdb::AptosDB;
+use aptos_crypto::{ed25519::Ed25519PublicKey, x25519, ValidCryptoMaterialStringExt};
+use aptos_genesis::{
+    config::{HostAndPort, Layout, ValidatorConfiguration},
+    GenesisInfo,
+};
+use aptos_types::account_address::AccountAddress;
 use async_trait::async_trait;
 use clap::Parser;
-use std::{convert::TryInto, path::PathBuf};
-use storage_interface::DbReaderWriter;
-use vm_genesis::Validator;
+use serde::{Deserialize, Serialize};
+use std::{path::PathBuf, str::FromStr};
 
-const MIN_PRICE_PER_GAS_UNIT: u64 = 1;
 const WAYPOINT_FILE: &str = "waypoint.txt";
 const GENESIS_FILE: &str = "genesis.blob";
 
@@ -64,20 +60,6 @@ pub struct GenerateGenesis {
     output_dir: PathBuf,
 }
 
-impl GenerateGenesis {
-    fn generate_genesis_txn(git_options: GitOptions) -> CliTypedResult<Transaction> {
-        let genesis_info = fetch_genesis_info(git_options)?;
-
-        Ok(vm_genesis::encode_genesis_transaction(
-            genesis_info.root_key.clone(),
-            &genesis_info.validators,
-            &genesis_info.modules,
-            genesis_info.chain_id,
-            MIN_PRICE_PER_GAS_UNIT,
-        ))
-    }
-}
-
 #[async_trait]
 impl CliCommand<Vec<PathBuf>> for GenerateGenesis {
     fn command_name(&self) -> &'static str {
@@ -91,25 +73,16 @@ impl CliCommand<Vec<PathBuf>> for GenerateGenesis {
         check_if_file_exists(waypoint_file.as_path(), self.prompt_options)?;
 
         // Generate genesis file
-        let genesis = Self::generate_genesis_txn(self.git_options)?;
+        let mut genesis_info = fetch_genesis_info(self.git_options)?;
+        let genesis = genesis_info.get_genesis();
         write_to_file(
             genesis_file.as_path(),
             GENESIS_FILE,
-            &bcs::to_bytes(&genesis).map_err(|e| CliError::BCS(GENESIS_FILE, e))?,
+            &bcs::to_bytes(genesis).map_err(|e| CliError::BCS(GENESIS_FILE, e))?,
         )?;
 
         // Generate waypoint file
-        let path = TempPath::new();
-        let aptosdb = AptosDB::open(
-            &path,
-            false,
-            NO_OP_STORAGE_PRUNER_CONFIG,
-            RocksdbConfig::default(),
-        )
-        .map_err(|e| CliError::UnexpectedError(e.to_string()))?;
-        let db_rw = DbReaderWriter::new(aptosdb);
-        let waypoint = executor::db_bootstrapper::generate_waypoint::<AptosVM>(&db_rw, &genesis)
-            .map_err(|e| CliError::UnexpectedError(e.to_string()))?;
+        let waypoint = genesis_info.generate_waypoint()?;
         write_to_file(
             waypoint_file.as_path(),
             WAYPOINT_FILE,
@@ -125,25 +98,107 @@ pub fn fetch_genesis_info(git_options: GitOptions) -> CliTypedResult<GenesisInfo
     let layout: Layout = client.get(LAYOUT_NAME)?;
 
     let mut validators = Vec::new();
+    let mut errors = Vec::new();
     for user in &layout.users {
-        validators.push(client.get::<ValidatorConfiguration>(user)?.try_into()?);
+        match get_config(&client, user) {
+            Ok(validator) => {
+                validators.push(validator);
+            }
+            Err(failure) => {
+                if let CliError::UnexpectedError(failure) = failure {
+                    errors.push(format!("{}: {}", user, failure));
+                } else {
+                    errors.push(format!("{}: {:?}", user, failure));
+                }
+            }
+        }
+    }
+
+    // Collect errors, and print out failed inputs
+    if !errors.is_empty() {
+        eprintln!(
+            "Failed to parse genesis inputs:\n{}",
+            serde_yaml::to_string(&errors).unwrap()
+        );
+        return Err(CliError::UnexpectedError(
+            "Failed to parse genesis inputs".to_string(),
+        ));
     }
 
     let modules = client.get_modules("framework")?;
 
-    Ok(GenesisInfo {
-        chain_id: layout.chain_id,
-        root_key: layout.root_key,
+    Ok(GenesisInfo::new(
+        layout.chain_id,
+        layout.root_key,
         validators,
         modules,
+        layout.min_price_per_gas_unit,
+        layout.allow_new_validators,
+        layout.min_stake,
+        layout.max_stake,
+        layout.min_lockup_duration_secs,
+        layout.max_lockup_duration_secs,
+        layout.epoch_duration_secs,
+        layout.initial_lockup_timestamp,
+    )?)
+}
+
+/// Do proper parsing so more information is known about failures
+fn get_config(client: &Client, user: &str) -> CliTypedResult<ValidatorConfiguration> {
+    let config = client.get::<StringValidatorConfiguration>(user)?;
+
+    // Convert each individually
+    let account_address = AccountAddress::from_str(&config.account_address)
+        .map_err(|_| CliError::UnexpectedError("account_address invalid".to_string()))?;
+    let account_key = Ed25519PublicKey::from_encoded_string(&config.account_public_key)
+        .map_err(|_| CliError::UnexpectedError("account_key invalid".to_string()))?;
+    let consensus_key = Ed25519PublicKey::from_encoded_string(&config.consensus_public_key)
+        .map_err(|_| CliError::UnexpectedError("consensus_key invalid".to_string()))?;
+    let validator_network_key =
+        x25519::PublicKey::from_encoded_string(&config.validator_network_public_key)
+            .map_err(|_| CliError::UnexpectedError("validator_network_key invalid".to_string()))?;
+    let validator_host = config.validator_host.clone();
+    let full_node_network_key =
+        if let Some(ref full_node_network_key) = config.full_node_network_public_key {
+            Some(
+                x25519::PublicKey::from_encoded_string(full_node_network_key).map_err(|_| {
+                    CliError::UnexpectedError("full_node_network_key invalid".to_string())
+                })?,
+            )
+        } else {
+            None
+        };
+    let full_node_host = config.full_node_host;
+
+    Ok(ValidatorConfiguration {
+        account_address,
+        consensus_public_key: consensus_key,
+        account_public_key: account_key,
+        validator_network_public_key: validator_network_key,
+        validator_host,
+        full_node_network_public_key: full_node_network_key,
+        full_node_host,
+        stake_amount: config.stake_amount,
     })
 }
 
-/// Holder object for all pieces needed to generate a genesis transaction
-#[derive(Clone)]
-pub struct GenesisInfo {
-    chain_id: ChainId,
-    root_key: Ed25519PublicKey,
-    validators: Vec<Validator>,
-    modules: Vec<Vec<u8>>,
+/// For better parsing error messages
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct StringValidatorConfiguration {
+    /// Account address
+    pub account_address: String,
+    /// Key used for signing in consensus
+    pub consensus_public_key: String,
+    /// Key used for signing transactions with the account
+    pub account_public_key: String,
+    /// Public key used for validator network identity (same as account address)
+    pub validator_network_public_key: String,
+    /// Host for validator which can be an IP or a DNS name
+    pub validator_host: HostAndPort,
+    /// Public key used for full node network identity (same as account address)
+    pub full_node_network_public_key: Option<String>,
+    /// Host for full node which can be an IP or a DNS name and is optional
+    pub full_node_host: Option<HostAndPort>,
+    /// Stake amount for consensus
+    pub stake_amount: u64,
 }

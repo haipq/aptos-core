@@ -10,13 +10,13 @@ const codeInjector = require("./src/remark/code-injector");
 const config = {
   title: "Aptos Labs",
   tagline: "Developer Documentation",
-  url: "https://docs.aptoslabs.com",
+  url: "https://aptos.dev",
   baseUrl: "/",
   onBrokenLinks: "warn",
   onBrokenMarkdownLinks: "warn",
   favicon: "img/favicon.ico",
   organizationName: "aptos-labs", // Usually your GitHub org/user name.
-  projectName: "developer-docs", // Usually your repo name.
+  projectName: "aptos-core", // Usually your repo name.
 
   presets: [
     [
@@ -26,6 +26,7 @@ const config = {
         docs: {
           routeBasePath: "/",
           sidebarPath: require.resolve("./sidebars.js"),
+          sidebarCollapsible: false,
           editUrl: "https://github.com/aptos-labs/aptos-core/tree/main/developer-docs-site/",
           remarkPlugins: [codeInjector],
         },
@@ -38,23 +39,126 @@ const config = {
         },
       }),
     ],
+    [
+      "redocusaurus",
+      {
+        // Plugin Options for loading OpenAPI files
+        specs: [
+          {
+            spec: "../api/doc/openapi.yaml",
+            route: "/rest-api/",
+          },
+        ],
+        // Theme Options for modifying how redoc renders them
+        theme: {
+          // Change with your site colors
+          primaryColor: "#1890ff",
+        },
+      },
+    ],
   ],
 
   themeConfig:
-  /** @type {import("@docusaurus/preset-classic").ThemeConfig} */
+    /** @type {import("@docusaurus/preset-classic").ThemeConfig} */
     ({
+      colorMode: {
+        defaultMode: "dark",
+      },
+      docs: {
+        sidebar: {
+          autoCollapseCategories: true,
+          hideable: true,
+        },
+      },
       navbar: {
         title: "| Developer Network",
         logo: {
           alt: "Aptos Labs Logo",
           src: "img/aptos_word.svg",
-          srcDark: "/img/aptos_word.svg",
+          srcDark: "img/aptos_word_dark.svg",
         },
         items: [
           {
             href: "https://github.com/aptos-labs/aptos-core/",
             label: "GitHub",
             position: "right",
+          },
+          {
+            type: "dropdown",
+            label: "Move",
+            position: "left",
+            items: [
+              {
+                label: "Move on Aptos",
+                type: "doc",
+                docId: "guides/move-guides/move-on-aptos",
+              },
+              {
+                label: "Your First Move Module",
+                type: "doc",
+                docId: "tutorials/first-move-module",
+              },
+            ],
+          },
+          {
+            type: "dropdown",
+            label: "Applications",
+            position: "left",
+            items: [
+              {
+                type: "doc",
+                label: "Your First Transaction",
+                docId: "tutorials/first-transaction",
+              },
+              {
+                type: "doc",
+                label: "Your First DApp",
+                docId: "tutorials/first-dapp",
+              },
+              {
+                type: "doc",
+                label: "Your First Coin",
+                docId: "tutorials/first-coin",
+              },
+              {
+                type: "doc",
+                label: "Your First NFT",
+                docId: "tutorials/your-first-nft",
+              },
+            ],
+          },
+          {
+            type: "dropdown",
+            label: "Nodes",
+            to: "nodes/nodes-index",
+            position: "left",
+            items: [
+              {
+                label: "Aptos Blockchain Deployments",
+                type: "doc",
+                docId: "nodes/aptos-deployments",
+              },
+              {
+                label: "Validators",
+                type: "doc",
+                docId: "nodes/validator-node/index",
+              },
+              {
+                label: "FullNodes",
+                type: "doc",
+                docId: "nodes/full-node/index",
+              },
+              {
+                label: "Local Testnet",
+                type: "doc",
+                docId: "nodes/run-a-local-testnet",
+              },
+            ],
+          },
+          {
+            position: "left",
+            href: "/rest-api",
+            label: "REST API",
           },
         ],
       },
@@ -69,7 +173,7 @@ const config = {
                   <a class="social-link" href="https://aptoslabs.com" target="_blank" rel="noopener noreferrer" title="Git">
                      <img class="logo" src="/img/aptos_word.svg" alt="Git Icon" />
                   </a>
-                `
+                `,
               },
             ],
           },
@@ -127,21 +231,64 @@ const config = {
         additionalLanguages: ["rust"],
       },
       algolia: {
-        appId: 'HM7UY0NMLG',
-        apiKey: 'ab185b9077070c3e02dce2e381a3f81b',
-        indexName: 'aptos',
+        appId: "HM7UY0NMLG",
+        apiKey: "63c5819714b74e64977337e61a1e3ae6",
+        indexName: "aptos",
         contextualSearch: true,
         debug: false,
       },
     }),
   plugins: [
     [
-      '@docusaurus/plugin-client-redirects',
+      "@docusaurus/plugin-client-redirects",
       {
         redirects: [
           {
-            to: '/tutorials/full-node/run-a-fullnode',
-            from: '/tutorials/run-a-fullnode',
+            to: "/nodes/full-node/fullnode-for-devnet",
+            from: "/tutorials/run-a-fullnode",
+          },
+          {
+            to: "/nodes/aptos-deployments",
+            from: "/tutorials/local-testnet-devnet-and-incentivized-testnet",
+          },
+          {
+            to: "/nodes/full-node/run-a-fullnode-on-gcp",
+            from: "/tutorials/run-a-fullnode-on-gcp",
+          },
+          {
+            to: "/nodes/ait/node-requirements",
+            from: "/tutorials/validator-node/intro",
+          },
+          {
+            to: "/nodes/validator-node/validators",
+            from: [
+              "/tutorials/validator-node/run-validator-node-using-gcp",
+              "/tutorials/validator-node/run-validator-node-using-aws",
+              "/tutorials/validator-node/run-validator-node-using-azure",
+              "/tutorials/validator-node/run-validator-node-using-docker",
+              "/tutorials/validator-node/run-validator-node-using-source",
+            ],
+          },
+          {
+            to: "/nodes/ait/connect-to-testnet",
+            from: "/tutorials/validator-node/connect-to-testnet",
+          },
+          {
+            to: "/nodes/ait/node-liveness-criteria",
+            from: "/reference/node-liveness-criteria",
+          },
+          {
+            to: "/concepts/aptos-concepts",
+            from: [
+              "/basics/basics-txns-states",
+              "/basics/basics-accounts",
+              "/basics/basics-events",
+              "/basics/basics-gas-txn-fee",
+              "/basics/basics-merkle-proof",
+              "/basics/basics-fullnodes",
+              "/basics/basics-validator-nodes",
+              "/basics/basics-node-networks-sync",
+            ],
           },
         ],
       },

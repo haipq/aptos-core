@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    storage_synchronizer::StorageSynchronizerInterface, tests::utils::create_transaction_info,
+    storage_synchronizer::StorageSynchronizerInterface,
+    tests::utils::{create_startup_info, create_transaction_info},
 };
 use anyhow::Result;
 use aptos_crypto::HashValue;
 use aptos_types::{
     account_address::AccountAddress,
-    contract_event::{ContractEvent, EventByVersionWithProof, EventWithProof},
+    contract_event::EventWithVersion,
     epoch_change::EpochChangeProof,
     event::EventKey,
     ledger_info::LedgerInfoWithSignatures,
@@ -19,12 +20,10 @@ use aptos_types::{
     state_proof::StateProof,
     state_store::{
         state_key::StateKey,
-        state_value::{
-            StateKeyAndValue, StateValue, StateValueChunkWithProof, StateValueWithProof,
-        },
+        state_value::{StateValue, StateValueChunkWithProof},
     },
     transaction::{
-        AccountTransactionsWithProof, Transaction, TransactionInfo, TransactionListWithProof,
+        AccountTransactionsWithProof, TransactionInfo, TransactionListWithProof,
         TransactionOutputListWithProof, TransactionToCommit, TransactionWithProof, Version,
     },
 };
@@ -34,7 +33,7 @@ use data_streaming_service::{
     data_stream::DataStreamListener,
     streaming_client::{DataStreamingClient, Epoch, NotificationFeedback},
 };
-use executor_types::ChunkExecutorTrait;
+use executor_types::{ChunkCommitNotification, ChunkExecutorTrait};
 use mockall::mock;
 use std::sync::Arc;
 use storage_interface::{
@@ -69,6 +68,9 @@ pub fn create_mock_reader_writer(
     reader
         .expect_get_latest_transaction_info_option()
         .returning(|| Ok(Some((0, create_transaction_info()))));
+    reader
+        .expect_get_startup_info()
+        .returning(|| Ok(Some(create_startup_info())));
 
     let writer = writer.unwrap_or_else(create_mock_db_writer);
     DbReaderWriter {
@@ -94,11 +96,16 @@ pub fn create_mock_storage_synchronizer() -> MockStorageSynchronizer {
 
 /// Creates a mock storage synchronizer that is not currently handling
 /// any pending storage data.
-pub fn create_ready_storage_synchronizer() -> MockStorageSynchronizer {
+pub fn create_ready_storage_synchronizer(expect_reset_executor: bool) -> MockStorageSynchronizer {
     let mut mock_storage_synchronizer = create_mock_storage_synchronizer();
     mock_storage_synchronizer
         .expect_pending_storage_data()
         .return_const(false);
+    if expect_reset_executor {
+        mock_storage_synchronizer
+            .expect_reset_chunk_executor()
+            .return_const(Ok(()));
+    }
 
     mock_storage_synchronizer
 }
@@ -126,16 +133,16 @@ mock! {
             txn_list_with_proof: TransactionListWithProof,
             verified_target_li: &LedgerInfoWithSignatures,
             epoch_change_li: Option<&'a LedgerInfoWithSignatures>,
-        ) -> Result<(Vec<ContractEvent>, Vec<Transaction>)>;
+        ) -> Result<ChunkCommitNotification>;
 
         fn apply_and_commit_chunk<'a>(
             &self,
             txn_output_list_with_proof: TransactionOutputListWithProof,
             verified_target_li: &LedgerInfoWithSignatures,
             epoch_change_li: Option<&'a LedgerInfoWithSignatures>,
-        ) -> Result<(Vec<ContractEvent>, Vec<Transaction>)>;
+        ) -> Result<ChunkCommitNotification>;
 
-        fn commit_chunk(&self) -> Result<(Vec<ContractEvent>, Vec<Transaction>)>;
+        fn commit_chunk(&self) -> Result<ChunkCommitNotification>;
 
         fn reset(&self) -> Result<()>;
     }
@@ -173,10 +180,6 @@ mock! {
             fetch_events: bool,
         ) -> Result<TransactionWithProof>;
 
-        fn get_first_txn_version(&self) -> Result<Option<Version>>;
-
-        fn get_first_write_set_version(&self) -> Result<Option<Version>>;
-
         fn get_transaction_outputs(
             &self,
             start_version: Version,
@@ -190,25 +193,9 @@ mock! {
             start: u64,
             order: Order,
             limit: u64,
-        ) -> Result<Vec<(u64, ContractEvent)>>;
-
-        fn get_events_with_proofs(
-            &self,
-            event_key: &EventKey,
-            start: u64,
-            order: Order,
-            limit: u64,
-            known_version: Option<u64>,
-        ) -> Result<Vec<EventWithProof>>;
+        ) -> Result<Vec<EventWithVersion>>;
 
         fn get_block_timestamp(&self, version: u64) -> Result<u64>;
-
-        fn get_event_by_version_with_proof(
-            &self,
-            event_key: &EventKey,
-            event_version: u64,
-            proof_version: u64,
-        ) -> Result<EventByVersionWithProof>;
 
         fn get_last_version_before_timestamp(
             &self,
@@ -255,18 +242,11 @@ mock! {
 
         fn get_state_proof(&self, known_version: u64) -> Result<StateProof>;
 
-        fn get_state_value_with_proof(
-            &self,
-            state_key: StateKey,
-            version: Version,
-            ledger_version: Version,
-        ) -> Result<StateValueWithProof>;
-
         fn get_state_value_with_proof_by_version(
             &self,
             state_key: &StateKey,
             version: Version,
-        ) -> Result<(Option<StateValue>, SparseMerkleProof<StateValue>)>;
+        ) -> Result<(Option<StateValue>, SparseMerkleProof)>;
 
         fn get_latest_tree_state(&self) -> Result<TreeState>;
 
@@ -308,7 +288,7 @@ mock! {
             &self,
             version: Version,
             expected_root_hash: HashValue,
-        ) -> Result<Box<dyn StateSnapshotReceiver<StateKeyAndValue>>>;
+        ) -> Result<Box<dyn StateSnapshotReceiver<StateKey, StateValue>>>;
 
         fn finalize_state_snapshot(
             &self,
@@ -322,6 +302,7 @@ mock! {
             &self,
             txns_to_commit: &[TransactionToCommit],
             first_version: Version,
+            base_state_version: Option<Version>,
             ledger_info_with_sigs: Option<&'a LedgerInfoWithSignatures>,
         ) -> Result<()>;
 
@@ -332,8 +313,8 @@ mock! {
 // This automatically creates a MockSnapshotReceiver.
 mock! {
     pub SnapshotReceiver {}
-    impl StateSnapshotReceiver<StateKeyAndValue> for SnapshotReceiver {
-        fn add_chunk(&mut self, chunk: Vec<(HashValue, StateKeyAndValue)>, proof: SparseMerkleRangeProof) -> Result<()>;
+    impl StateSnapshotReceiver<StateKey, StateValue> for SnapshotReceiver {
+        fn add_chunk(&mut self, chunk: Vec<(StateKey, StateValue)>, proof: SparseMerkleRangeProof) -> Result<()>;
 
         fn finish(self) -> Result<()>;
 
@@ -432,6 +413,8 @@ mock! {
             notification_id: NotificationId,
             account_states_with_proof: StateValueChunkWithProof,
         ) -> Result<(), crate::error::Error>;
+
+        fn reset_chunk_executor(&mut self) -> Result<(), crate::error::Error>;
     }
     impl Clone for StorageSynchronizer {
         fn clone(&self) -> Self;

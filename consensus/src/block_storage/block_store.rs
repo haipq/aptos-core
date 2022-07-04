@@ -23,7 +23,6 @@ use aptos_types::{ledger_info::LedgerInfoWithSignatures, transaction::Transactio
 use consensus_types::{
     block::Block, common::Round, executed_block::ExecutedBlock, quorum_cert::QuorumCert,
     sync_info::SyncInfo, timeout_2chain::TwoChainTimeoutCertificate,
-    timeout_certificate::TimeoutCertificate,
 };
 use executor_types::{Error, StateComputeResult};
 use futures::executor::block_on;
@@ -112,7 +111,6 @@ impl BlockStore {
         time_service: Arc<dyn TimeService>,
         back_pressure_limit: Round,
     ) -> Self {
-        let highest_tc = initial_data.highest_timeout_certificate();
         let highest_2chain_tc = initial_data.highest_2chain_timeout_certificate();
         let (root, root_metadata, blocks, quorum_certs) = initial_data.take();
         let block_store = block_on(Self::build(
@@ -120,7 +118,6 @@ impl BlockStore {
             root_metadata,
             blocks,
             quorum_certs,
-            highest_tc,
             highest_2chain_tc,
             state_computer,
             storage,
@@ -158,7 +155,6 @@ impl BlockStore {
         root_metadata: RootMetadata,
         blocks: Vec<Block>,
         quorum_certs: Vec<QuorumCert>,
-        highest_timeout_cert: Option<TimeoutCertificate>,
         highest_2chain_timeout_cert: Option<TwoChainTimeoutCertificate>,
         state_computer: Arc<dyn StateComputer>,
         storage: Arc<dyn PersistentLivenessStorage>,
@@ -210,7 +206,6 @@ impl BlockStore {
             root_ordered_cert,
             root_commit_li,
             max_pruned_blocks_in_mem,
-            highest_timeout_cert.map(Arc::new),
             highest_2chain_timeout_cert.map(Arc::new),
         );
 
@@ -298,7 +293,6 @@ impl BlockStore {
     ) {
         let max_pruned_blocks_in_mem = self.inner.read().max_pruned_blocks_in_mem();
         // Rollover the previous highest TC from the old tree to the new one.
-        let prev_htc = self.highest_timeout_cert().map(|tc| tc.as_ref().clone());
         let prev_2chain_htc = self
             .highest_2chain_timeout_cert()
             .map(|tc| tc.as_ref().clone());
@@ -307,7 +301,6 @@ impl BlockStore {
             root_metadata,
             blocks,
             quorum_certs,
-            prev_htc,
             prev_2chain_htc,
             Arc::clone(&self.state_computer),
             Arc::clone(&self.storage),
@@ -367,7 +360,17 @@ impl BlockStore {
 
         // ensure local time past the block time
         let block_time = Duration::from_micros(executed_block.timestamp_usecs());
-        self.time_service.wait_until(block_time);
+        let current_timestamp = self.time_service.get_current_timestamp();
+        if let Some(t) = block_time.checked_sub(current_timestamp) {
+            if t > Duration::from_secs(1) {
+                error!(
+                    "Long wait time {}ms for block {}",
+                    t.as_millis(),
+                    executed_block.block()
+                );
+            }
+            self.time_service.wait_until(block_time);
+        }
         self.storage
             .save_tree(vec![executed_block.block().clone()], vec![])
             .context("Insert block failed when saving block")?;
@@ -381,7 +384,6 @@ impl BlockStore {
             .state_computer
             .compute(&block, block.parent_id())
             .await?;
-        observe_block(block.timestamp_usecs(), BlockStage::EXECUTED);
 
         Ok(ExecutedBlock::new(block, state_compute_result))
     }
@@ -417,22 +419,6 @@ impl BlockStore {
             .save_tree(vec![], vec![qc.clone()])
             .context("Insert block failed when saving quorum")?;
         self.inner.write().insert_quorum_cert(qc)
-    }
-
-    /// Replace the highest timeout certificate in case the given one has a higher round.
-    /// In case a timeout certificate is updated, persist it to storage.
-    pub fn insert_timeout_certificate(&self, tc: Arc<TimeoutCertificate>) -> anyhow::Result<()> {
-        let cur_tc_round = self
-            .highest_2chain_timeout_cert()
-            .map_or(0, |tc| tc.round());
-        if tc.round() <= cur_tc_round {
-            return Ok(());
-        }
-        self.storage
-            .save_highest_timeout_cert(tc.as_ref().clone())
-            .context("Timeout certificate insert failed when persisting to DB")?;
-        self.inner.write().replace_timeout_cert(tc);
-        Ok(())
     }
 
     /// Replace the highest 2chain timeout certificate in case the given one has a higher round.
@@ -532,10 +518,6 @@ impl BlockReader for BlockStore {
         self.inner.read().highest_ledger_info()
     }
 
-    fn highest_timeout_cert(&self) -> Option<Arc<TimeoutCertificate>> {
-        self.inner.read().highest_timeout_cert()
-    }
-
     fn highest_2chain_timeout_cert(&self) -> Option<Arc<TwoChainTimeoutCertificate>> {
         self.inner.read().highest_2chain_timeout_cert()
     }
@@ -545,7 +527,6 @@ impl BlockReader for BlockStore {
             self.highest_quorum_cert().as_ref().clone(),
             self.highest_ordered_cert().as_ref().clone(),
             Some(self.highest_ledger_info()),
-            self.highest_timeout_cert().map(|tc| tc.as_ref().clone()),
             self.highest_2chain_timeout_cert()
                 .map(|tc| tc.as_ref().clone()),
         )

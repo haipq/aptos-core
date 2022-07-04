@@ -77,8 +77,16 @@ target-out-docker
 
 # Emacs backup files
 *~
+.\#*
 .*\#
 \#*\#
 
 # Aptos CLI files
 .aptos/
+
+# VSCode settings
+.vscode/
+
+# Typescript
+*.env
+node_modules

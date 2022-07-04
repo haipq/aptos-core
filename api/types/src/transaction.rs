@@ -251,13 +251,14 @@ impl From<(TransactionInfo, WriteSetPayload, Vec<Event>)> for Transaction {
     }
 }
 
-impl From<(&BlockMetadata, TransactionInfo)> for Transaction {
-    fn from((txn, info): (&BlockMetadata, TransactionInfo)) -> Self {
+impl From<(&BlockMetadata, TransactionInfo, Vec<Event>)> for Transaction {
+    fn from((txn, info, events): (&BlockMetadata, TransactionInfo, Vec<Event>)) -> Self {
         Transaction::BlockMetadataTransaction(BlockMetadataTransaction {
             info,
             id: txn.id().into(),
             epoch: txn.epoch().into(),
             round: txn.round().into(),
+            events,
             previous_block_votes: txn.previous_block_votes().clone(),
             proposer: txn.proposer().into(),
             timestamp: txn.timestamp_usecs().into(),
@@ -329,6 +330,14 @@ pub struct UserTransactionRequest {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct UserCreateSigningMessageRequest {
+    #[serde(flatten)]
+    pub transaction: UserTransactionRequest,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secondary_signers: Option<Vec<Address>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GenesisTransaction {
     #[serde(flatten)]
     pub info: TransactionInfo,
@@ -343,6 +352,7 @@ pub struct BlockMetadataTransaction {
     pub id: HashValue,
     pub epoch: U64,
     pub round: U64,
+    pub events: Vec<Event>,
     pub previous_block_votes: Vec<bool>,
     pub proposer: Address,
     pub timestamp: U64,

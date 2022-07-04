@@ -64,13 +64,36 @@ pub enum BootstrappingMode {
     ExecuteTransactionsFromGenesis,     // Executes transactions (starting at genesis)
 }
 
+impl BootstrappingMode {
+    pub fn to_label(&self) -> &'static str {
+        match self {
+            BootstrappingMode::ApplyTransactionOutputsFromGenesis => {
+                "apply_transaction_outputs_from_genesis"
+            }
+            BootstrappingMode::DownloadLatestAccountStates => "download_latest_account_states",
+            BootstrappingMode::ExecuteTransactionsFromGenesis => {
+                "execute_transactions_from_genesis"
+            }
+        }
+    }
+}
+
 /// The continuous syncing mode determines how the node will stay up-to-date
 /// once it has bootstrapped and the blockchain continues to grow, e.g.,
 /// continuously executing all transactions.
 #[derive(Copy, Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub enum ContinuousSyncingMode {
-    ExecuteTransactions,     // Executes transactions to stay up-to-date
     ApplyTransactionOutputs, // Applies transaction outputs to stay up-to-date
+    ExecuteTransactions,     // Executes transactions to stay up-to-date
+}
+
+impl ContinuousSyncingMode {
+    pub fn to_label(&self) -> &'static str {
+        match self {
+            ContinuousSyncingMode::ApplyTransactionOutputs => "apply_transaction_outputs",
+            ContinuousSyncingMode::ExecuteTransactions => "execute_transactions",
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -111,6 +134,7 @@ pub struct StorageServiceConfig {
     pub max_epoch_chunk_size: u64,           // Max num of epoch ending ledger infos per chunk
     pub max_lru_cache_size: u64,             // Max num of items in the lru cache before eviction
     pub max_network_channel_size: u64,       // Max num of pending network messages
+    pub max_subscription_period_ms: u64,     // Max period (ms) of pending subscription requests
     pub max_transaction_chunk_size: u64,     // Max num of transactions per chunk
     pub max_transaction_output_chunk_size: u64, // Max num of transaction outputs per chunk
     pub storage_summary_refresh_interval_ms: u64, // The interval (ms) to refresh the storage summary
@@ -124,6 +148,7 @@ impl Default for StorageServiceConfig {
             max_epoch_chunk_size: 100,
             max_lru_cache_size: 100,
             max_network_channel_size: 4000,
+            max_subscription_period_ms: 10000,
             max_transaction_chunk_size: 1000,
             max_transaction_output_chunk_size: 1000,
             storage_summary_refresh_interval_ms: 50,
@@ -185,7 +210,7 @@ impl Default for AptosDataClientConfig {
             max_num_in_flight_priority_polls: 10,
             max_num_in_flight_regular_polls: 10,
             response_timeout_ms: 5000,
-            summary_poll_interval_ms: 100,
+            summary_poll_interval_ms: 200,
         }
     }
 }

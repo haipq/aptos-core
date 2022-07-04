@@ -9,7 +9,7 @@ use aptos_types::{
     transaction::Version,
 };
 use aptos_vm::AptosVM;
-use aptosdb::metrics::APTOS_STORAGE_API_LATENCY_SECONDS;
+use aptosdb::metrics::API_LATENCY_SECONDS;
 use executor::{
     block_executor::BlockExecutor,
     metrics::{
@@ -17,7 +17,7 @@ use executor::{
         APTOS_EXECUTOR_VM_EXECUTE_BLOCK_SECONDS,
     },
 };
-use executor_types::BlockExecutorTrait;
+use executor_types::{BlockExecutorTrait, StateSnapshotDelta};
 use std::{
     collections::BTreeMap,
     sync::{mpsc, Arc},
@@ -47,6 +47,7 @@ pub struct TransactionCommitter {
     executor: Arc<BlockExecutor<AptosVM>>,
     version: Version,
     block_receiver: mpsc::Receiver<(HashValue, HashValue, Instant, Instant, Duration, usize)>,
+    state_commit_sender: mpsc::SyncSender<StateSnapshotDelta>,
 }
 
 impl TransactionCommitter {
@@ -54,11 +55,13 @@ impl TransactionCommitter {
         executor: Arc<BlockExecutor<AptosVM>>,
         version: Version,
         block_receiver: mpsc::Receiver<(HashValue, HashValue, Instant, Instant, Duration, usize)>,
+        state_commit_sender: mpsc::SyncSender<StateSnapshotDelta>,
     ) -> Self {
         Self {
             version,
             executor,
             block_receiver,
+            state_commit_sender,
         }
     }
 
@@ -78,8 +81,10 @@ impl TransactionCommitter {
             self.version += num_txns as u64;
             let commit_start = std::time::Instant::now();
             let ledger_info_with_sigs = gen_li_with_sigs(block_id, root_hash, self.version);
-            self.executor
-                .commit_blocks(vec![block_id], ledger_info_with_sigs)
+            let snapshot_delta = self
+                .executor
+                .commit_blocks_ext(vec![block_id], ledger_info_with_sigs, false)
+                .unwrap()
                 .unwrap();
 
             report_block(
@@ -91,6 +96,7 @@ impl TransactionCommitter {
                 Instant::now().duration_since(commit_start),
                 num_txns,
             );
+            self.state_commit_sender.send(snapshot_delta).unwrap();
         }
     }
 }
@@ -119,7 +125,7 @@ fn report_block(
             APTOS_EXECUTOR_VM_EXECUTE_BLOCK_SECONDS.get_sample_sum(),
             APTOS_EXECUTOR_EXECUTE_BLOCK_SECONDS.get_sample_sum() - APTOS_EXECUTOR_VM_EXECUTE_BLOCK_SECONDS.get_sample_sum(),
             APTOS_EXECUTOR_COMMIT_BLOCKS_SECONDS.get_sample_sum(),
-            APTOS_STORAGE_API_LATENCY_SECONDS.get_metric_with_label_values(&["save_transactions", "Ok"]).expect("must exist.").get_sample_sum(),
+            API_LATENCY_SECONDS.get_metric_with_label_values(&["save_transactions", "Ok"]).expect("must exist.").get_sample_sum(),
         );
     const NANOS_PER_SEC: f64 = 1_000_000_000.0;
     info!(
@@ -130,7 +136,7 @@ fn report_block(
                 / total_versions,
             APTOS_EXECUTOR_COMMIT_BLOCKS_SECONDS.get_sample_sum() * NANOS_PER_SEC
                 / total_versions,
-            APTOS_STORAGE_API_LATENCY_SECONDS.get_metric_with_label_values(&["save_transactions", "Ok"]).expect("must exist.").get_sample_sum() * NANOS_PER_SEC
+            API_LATENCY_SECONDS.get_metric_with_label_values(&["save_transactions", "Ok"]).expect("must exist.").get_sample_sum() * NANOS_PER_SEC
                 / total_versions,
         );
 }
